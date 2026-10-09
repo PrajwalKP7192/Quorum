@@ -1,0 +1,15 @@
+{
+  "name": "quorum",
+  "version": "0.1.0",
+  "description": "Multi-agent research team that verifies claims before reporting them",
+  "main": "src/cli.js",
+  "scripts": {
+    "smoke": "node scripts/smoke.js",
+    "test": "node --test \"test/*.test.js\"",
+    "cli": "node src/cli.js"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}
