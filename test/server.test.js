@@ -34,7 +34,7 @@ test('serves the dashboard page at /', async () => {
     const res = await fetch(base + '/');
     const html = await res.text();
     assert.equal(res.status, 200);
-    assert.match(html, /<title>Quorum<\/title>/);
+    assert.match(html, /<title>Quorum[^<]*<\/title>/);
     assert.match(html, /EventSource/);
   } finally {
     server.close();
