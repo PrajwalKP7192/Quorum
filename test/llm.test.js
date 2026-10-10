@@ -152,6 +152,24 @@ test('structuredChat recovers when tools are blocked on the final call (Groq too
   assert.equal(calls, 2);
 });
 
+test('chat fails fast on a daily token budget (no pointless retries)', async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    return {
+      ok: false,
+      status: 429,
+      text: async () =>
+        '{"error":{"message":"Rate limit reached ... on tokens per day (TPD): Limit 200000, Used 199000","code":"rate_limit_exceeded"}}',
+    };
+  };
+  await assert.rejects(
+    llm.chat({ messages: [{ role: 'user', content: 'q' }], apiKey: 'k', fetchImpl }),
+    /daily token budget exhausted/
+  );
+  assert.equal(calls, 1); // no retry storm against a wall that resets tomorrow
+});
+
 test('chat escalates temperature on repair retries', async () => {
   const bodies = [];
   const fetchImpl = async (url, opts) => {

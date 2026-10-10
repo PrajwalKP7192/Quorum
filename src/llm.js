@@ -102,6 +102,14 @@ async function chat({
 
     const text = await res.text().catch(() => '');
     if (res.status === 429 && attempt429 < MAX_429_RETRIES) {
+      // A DAILY token budget will not recover in minutes — retrying just
+      // burns time. Fail fast with a clear message instead.
+      if (/tokens per day|TPD/i.test(text)) {
+        throw new Error(
+          'LLM API daily token budget exhausted — no more calls until it resets. ' +
+            'Try again tomorrow, or raise the limit on a paid tier.'
+        );
+      }
       const hint = parseRetryHint(res, text);
       const waitMs = Math.min(
         (hint ?? Math.min(2 ** attempt429 * 5, 30)) * 1000 + Math.random() * 1000,
