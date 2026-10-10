@@ -1,5 +1,9 @@
 # Quorum
 
+[![CI](https://github.com/PrajwalKP7192/Quorum/actions/workflows/ci.yml/badge.svg)](https://github.com/PrajwalKP7192/Quorum/actions/workflows/ci.yml)
+![tests](https://img.shields.io/badge/tests-68%20passing-brightgreen)
+![deps](https://img.shields.io/badge/runtime%20deps-1%20%28zod%29-blue)
+
 A multi-agent research team. A **Researcher** decomposes a question and gathers cited
 claims, a **Fact-checker** independently verifies every claim against live sources, and
 a **Synthesizer** writes the final report from verified claims only. An orchestrator
@@ -7,7 +11,44 @@ routes the work and runs the verify-and-revise loop.
 
 The full roadmap and implementation plan lives in [PLAN.md](PLAN.md).
 
-## Status — Phase 3 complete, live-validated
+## How it works
+
+```
+question ──▶ Orchestrator
+                 │
+                 ▼
+          ┌─────────────┐  web_search + open_page
+          │ Researcher  │──────────────▶ Tavily
+          └──────┬──────┘
+                 ▼  claims[] with citations (Zod-validated)
+          ┌──────────────┐  verify each claim (parallel, temp 0)
+          │ Fact-checker │──────────────▶ Tavily
+          └──────┬───────┘
+                 ▼  verdicts[] (verbatim evidence quote + URL)
+      any failed? ──yes──▶ back to Researcher (max MAX_ROUNDS)
+                 │ no
+                 ▼
+          ┌──────────────┐
+          │ Synthesizer  │──▶ report from supported claims only
+          └──────────────┘     + "Excluded claims" appendix
+```
+
+Design principles:
+
+- **Agents exchange typed, Zod-validated objects** (`src/contracts.js`) — never free-form
+  chat transcripts. This file is the only coupling between agents, so any agent can be
+  swapped in a one-file rewrite.
+- **Never trust the model at the boundary:** claim ids are assigned in code, verdicts
+  must quote evidence verbatim with a URL, structured outputs get schema-repair
+  round-trips, and a mechanical (no-LLM) citation check confirms quotes really appear
+  on the cited pages.
+- **Plain `fetch` everywhere;** the only runtime dependency is `zod`. Works with any
+  OpenAI-compatible endpoint.
+- **Failures are contained:** per-claim verification is failure-isolated, rate limits
+  and transient network errors are retried with provider hints, and transcripts are
+  auto-trimmed to fit token-per-minute ceilings.
+
+## Status
 
 - [x] Phase 0 — config, LLM client with Zod-validated structured output, agent contracts
 - [x] Phase 1 — one agent with web-search tools + CLI
@@ -18,36 +59,44 @@ The full roadmap and implementation plan lives in [PLAN.md](PLAN.md).
 - [x] Phase 5 — tracing (JSONL per run) + eval scorecard (`npm run eval`)
 - [ ] Optional: Phase 6 — web service + live dashboard
 
-Runs on any OpenAI-compatible endpoint; validated on Groq's free tier
-(`gpt-oss-20b`) with Tavily search. Free-tier quirks are handled: rate-limit
-retries with provider hints, transcript trimming for TPM caps, and recovery
-from provider-side tool-call parse rejections.
-
 ## Setup
 
 ```bash
 npm install
 cp .env.example .env   # then fill in OPENAI_API_KEY (+ TAVILY_API_KEY for search)
+npm test               # 68 tests, no network or API keys needed
 npm run smoke          # one LLM round-trip → Zod-validated object
-npm test               # full suite, no network needed
 npm run cli -- "What is the current population of Tokyo?"   # full pipeline
 npm run eval -- --limit 3   # eval scorecard over the question set
 ```
 
-Every run writes `runs/<id>/trace.jsonl` (one JSON line per LLM call, tool call
-and round result) and `runs/<id>/state.json` (the verified claims and verdicts).
-
 Works with any OpenAI-compatible endpoint: set `OPENAI_BASE_URL` and `LLM_MODEL`
-in `.env` if you are not using OpenAI directly.
+in `.env` if you are not using OpenAI directly. Validated on Groq's free tier
+(`openai/gpt-oss-20b`) with Tavily search.
 
-## Design notes
+## Example (live run, 2026-10-10)
 
-- Agents exchange Zod-validated objects (`src/contracts.js`) — not chat transcripts.
-  This file is the only coupling between agents.
-- Plain `fetch` for LLM and search calls; the only dependency is `zod`.
-- Everything is configurable via environment variables (`src/config.js`).
-- `structuredChat()` asks the model for JSON, validates it with Zod, and runs one
-  repair round-trip with the validation errors if the first attempt fails.
-- Known risk: fetched web content is fed to the agents unfiltered — treat report
-  claims as untrusted until Phase 4's mechanical citation check and source
-  ranking harden this further.
+```
+## Verdicts (round 1)
+  ✓ [c1] supported     The population of Tokyo prefecture was 14,002,534 residents ...
+      https://www.nippon.com/en/japan-data/h02503
+  ✓ [c2] supported     ...
+```
+
+> **Current Population of Tokyo Prefecture** — The most recent official estimates
+> indicate that Tokyo prefecture has a population of **14,002,534 residents** …
+> cited inline as `[cN](url)`, with excluded claims listed in an appendix.
+
+Every run persists `runs/<id>/state.json` (claims, verdicts, report) and
+`runs/<id>/trace.jsonl` — one JSON line per LLM call, tool call and round result.
+
+## Known limitations
+
+- Fetched web content is fed to the agents unfiltered — treat report claims as
+  untrusted until further hardening (prompt-injection surface).
+- On Groq's free tier a full run takes ~10 minutes, mostly rate-limit waits;
+  higher limits (or any paid endpoint) make it far faster.
+
+## License
+
+[MIT](LICENSE)

@@ -9,7 +9,7 @@
     "eval": "node evals/grade.js",
     "cli": "node src/cli.js"
   },
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "zod": "^4.6.5"
   }
