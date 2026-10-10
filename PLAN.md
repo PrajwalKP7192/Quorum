@@ -96,7 +96,20 @@ Model assignment (env-overridable): strong model for researcher/synthesizer
       `runs/2026-10-10T16-42-32-161Z/`. Answer: 14,002,534 (Tokyo prefecture).
       Known quality gap for Phase 4: researcher emitted near-duplicate claims
       (all 5 were the same fact).
-- **Free-tier hardening added during live testing** (all regression-tested, 55 tests):
+- [x] **Phase 5 — Tracing + evals** (code complete 2026-10-10):
+      `src/trace.js` (JSONL event log per run at `runs/<id>/trace.jsonl`:
+      `llm_call` with model/latency/token counts, `tool_call` with args/duration,
+      `agent_event` per round, `run:start`/`run:done`); threaded through llm.js,
+      the tool loop, all three agents and the orchestrator.
+      `evals/questions.json` (20 stable factual questions with expected-answer
+      labels) + `evals/grade.js` (`npm run eval [-- --limit N] [-- --rounds N]`):
+      scorecard for coverage, mechanical citation validity, supported rate,
+      tokens and latency; results saved to `evals/results-<ts>.json`.
+      68 tests green.
+- **Remaining Phase 4/5 exit numbers**: run `npm run eval -- --limit 5` once the
+  free-tier daily budget has recovered to fill in the actual percentages for
+  PLAN.md/resume. Phase 6 (service + UI) optional.
+- **Free-tier hardening added during live testing** (all regression-tested):
       429 retry with provider hint parsing (seconds + minutes), transient network
       retries, transcript trimming to fit 8K TPM request caps, tool-result size
       caps, recovery from provider-side tool-call rejections (hallucinated tool

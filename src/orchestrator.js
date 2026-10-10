@@ -13,6 +13,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const config = require('./config');
 const { RunState } = require('./contracts');
+const { createTrace } = require('./trace');
 const { research, revise } = require('./agents/researcher');
 const { verifyAll } = require('./verify');
 const { checkCitations } = require('./tools/citation-check');
@@ -49,6 +50,8 @@ async function runPipeline({
   if (!question || typeof question !== 'string') throw new Error('runPipeline: question is required');
 
   const runDir = outDir || path.join(runsRoot, new Date().toISOString().replace(/[:.]/g, '-'));
+  const trace = await createTrace(runDir);
+  await trace.event('run:start', { question });
 
   const state = RunState.parse({ question, round: 0 });
   const claimHistory = []; // full claim list per round, for dropped-claim lookups
@@ -65,8 +68,8 @@ async function runPipeline({
 
     const result =
       round === 0
-        ? await researchFn({ question, llm, tools, model: researcherModel })
-        : await reviseFn({ priorClaims, failedVerdicts, llm, tools, model: researcherModel });
+        ? await researchFn({ question, llm, tools, model: researcherModel, trace })
+        : await reviseFn({ priorClaims, failedVerdicts, llm, tools, model: researcherModel, trace });
     state.subQuestions = result.subQuestions;
     state.claims = result.claims;
     usage.rounds.push(result.usage ?? null);
@@ -82,7 +85,7 @@ async function runPipeline({
     }
 
     onEvent('verify:start', { round: round + 1, claims: state.claims.length });
-    state.verdicts = await verifyAllFn(state.claims, { llm, tools, concurrency, checkerModel });
+    state.verdicts = await verifyAllFn(state.claims, { llm, tools, concurrency, checkerModel, trace });
 
     // Mechanical citation check (no LLM): do the quoted evidence quotes really
     // appear on the cited pages? strict demotes failed supports to
@@ -110,6 +113,12 @@ async function runPipeline({
       failed: failed.length,
       verdicts: state.verdicts,
     });
+    await trace.event('agent_event', {
+      round: round + 1,
+      claims: state.claims.length,
+      supported: state.verdicts.length - failed.length,
+      failed: failed.length,
+    });
     await persistState(runDir, state);
 
     if (failed.length === 0) break;
@@ -117,10 +126,11 @@ async function runPipeline({
   }
 
   onEvent('report:start', {});
-  const synth = await synthesizeFn({ state, llm, model: synthesizerModel });
+  const synth = await synthesizeFn({ state, llm, model: synthesizerModel, trace });
   state.report = synth.report;
   usage.synthesis = synth.usage ?? null;
 
+  await trace.event('run:done', { roundsUsed, claims: state.claims.length });
   await persistState(runDir, state);
   await fs.writeFile(path.join(runDir, 'quorum-report.md'), synth.report + '\n');
 

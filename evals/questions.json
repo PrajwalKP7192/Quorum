@@ -1,0 +1,22 @@
+[
+  { "question": "What is the capital city of Australia?", "expected": ["canberra"] },
+  { "question": "How many continents are there on Earth?", "expected": ["seven", "7"] },
+  { "question": "What is the chemical symbol for gold?", "expected": ["au"] },
+  { "question": "Which planet in our solar system is closest to the Sun?", "expected": ["mercury"] },
+  { "question": "What is generally considered the longest river in the world?", "expected": ["nile"] },
+  { "question": "In which year did World War II end?", "expected": ["1945"] },
+  { "question": "At what temperature in Fahrenheit does water freeze at sea level?", "expected": ["32"] },
+  { "question": "Who painted the Mona Lisa?", "expected": ["leonardo da vinci", "da vinci"] },
+  { "question": "What is the largest ocean on Earth by surface area?", "expected": ["pacific"] },
+  { "question": "How many elements are in the periodic table as of 2024?", "expected": ["118"] },
+  { "question": "What is the capital of Japan?", "expected": ["tokyo"] },
+  { "question": "Which gas do plants absorb from the atmosphere for photosynthesis?", "expected": ["carbon dioxide", "co2"] },
+  { "question": "What is the approximate speed of light in vacuum, in kilometers per second?", "expected": ["299,792", "299792", "300,000", "300000"] },
+  { "question": "Who wrote the play Romeo and Juliet?", "expected": ["shakespeare"] },
+  { "question": "What is the smallest prime number?", "expected": ["two", "2"] },
+  { "question": "In which country were the 2016 Summer Olympics held?", "expected": ["brazil"] },
+  { "question": "What is the official currency of the United Kingdom?", "expected": ["pound"] },
+  { "question": "How many bones are in the adult human body?", "expected": ["206"] },
+  { "question": "Which mountain is the tallest above sea level?", "expected": ["everest"] },
+  { "question": "In which year did the Titanic sink?", "expected": ["1912"] }
+]

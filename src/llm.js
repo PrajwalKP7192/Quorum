@@ -54,6 +54,7 @@ async function chat({
   timeoutMs = config.REQUEST_TIMEOUT_MS,
   retryBaseDelayMs = 5000,
   fetchImpl = fetch,
+  trace,
 } = {}) {
   if (!apiKey) {
     throw new Error(
@@ -71,6 +72,7 @@ async function chat({
 
   let res;
   let attempt429 = 0;
+  const started = Date.now();
   while (true) {
     try {
       res = await fetchImpl(`${baseUrl}/chat/completions`, {
@@ -116,6 +118,15 @@ async function chat({
   const data = await res.json();
   const choice = data.choices && data.choices[0];
   if (!choice) throw new Error('LLM API returned no choices');
+  if (trace) {
+    await trace.event('llm_call', {
+      model: body.model,
+      latencyMs: Date.now() - started,
+      retries: attempt429,
+      prompt_tokens: data.usage?.prompt_tokens ?? null,
+      completion_tokens: data.usage?.completion_tokens ?? null,
+    });
+  }
   return { message: choice.message, usage: data.usage ?? null, raw: data };
 }
 
@@ -165,6 +176,7 @@ async function structuredChat({
   baseUrl,
   timeoutMs,
   fetchImpl,
+  trace,
 } = {}) {
   if (!schema) throw new Error('structuredChat() requires a Zod schema');
 
@@ -191,6 +203,7 @@ async function structuredChat({
         baseUrl,
         timeoutMs,
         fetchImpl,
+        trace,
       }));
     } catch (err) {
       // Groq can reject an unparseable model turn with a 400 before we ever

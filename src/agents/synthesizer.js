@@ -16,7 +16,7 @@ Rules:
 - After the report body, add a "## Excluded claims" section listing each unsupported or dropped claim as "- <text> — <verdict> (<feedback>)". Include it even if brief; write "(none)" if the list is empty.
 Output only the markdown.`;
 
-async function synthesize({ state, llm, model = config.LLM_MODEL, temperature = 0.3 }) {
+async function synthesize({ state, llm, model = config.LLM_MODEL, temperature = 0.3, trace }) {
   const byId = new Map(state.claims.map((c) => [c.id, c]));
   const supported = state.verdicts
     .filter((v) => v.verdict === 'supported')
@@ -44,7 +44,7 @@ ${JSON.stringify(unsupported, null, 2)}`;
   const { message, usage } = await llm.chat({ messages: [
     { role: 'system', content: SYSTEM },
     { role: 'user', content: user },
-  ], model, temperature });
+  ], model, temperature, trace });
 
   return { report: contentText(message).trim(), usage, supportedCount: supported.length };
 }

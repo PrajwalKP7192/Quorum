@@ -6,6 +6,7 @@
   "scripts": {
     "smoke": "node scripts/smoke.js",
     "test": "node --test \"test/*.test.js\"",
+    "eval": "node evals/grade.js",
     "cli": "node src/cli.js"
   },
   "license": "ISC",

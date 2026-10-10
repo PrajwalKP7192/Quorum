@@ -48,7 +48,7 @@ function fallbackVerdict(claim, reason) {
   });
 }
 
-async function verifyClaim({ claim, llm, tools, model = config.CHECKER_MODEL, maxSteps = 6 }) {
+async function verifyClaim({ claim, llm, tools, model = config.CHECKER_MODEL, maxSteps = 6, trace }) {
   if (!claim) throw new Error('verifyClaim: claim is required');
 
   const claimBrief = JSON.stringify(
@@ -65,6 +65,7 @@ async function verifyClaim({ claim, llm, tools, model = config.CHECKER_MODEL, ma
       tools,
       maxSteps,
       temperature: 0,
+      trace,
     });
 
     const { data } = await llm.structuredChat({
@@ -73,6 +74,7 @@ async function verifyClaim({ claim, llm, tools, model = config.CHECKER_MODEL, ma
       schema: CheckResult,
       model,
       temperature: 0,
+      trace,
     });
 
     return Verdict.parse({ claimId: claim.id, ...data });

@@ -14,8 +14,9 @@ The full roadmap and implementation plan lives in [PLAN.md](PLAN.md).
 - [x] Phase 2 — two-agent pipeline (claims → verdicts)
 - [x] Phase 3 — feedback loop + synthesis
 - [x] Live end-to-end run (2026-10-10): 5/5 claims verified, cited report generated
-- [ ] Phase 4 — quality hardening (mechanical citation checks, claim dedupe)
-- [ ] Phase 5 — tracing + eval scorecard
+- [x] Phase 4 — quality hardening (mechanical citation checks, claim dedupe, source ranking)
+- [x] Phase 5 — tracing (JSONL per run) + eval scorecard (`npm run eval`)
+- [ ] Optional: Phase 6 — web service + live dashboard
 
 Runs on any OpenAI-compatible endpoint; validated on Groq's free tier
 (`gpt-oss-20b`) with Tavily search. Free-tier quirks are handled: rate-limit
@@ -30,7 +31,11 @@ cp .env.example .env   # then fill in OPENAI_API_KEY (+ TAVILY_API_KEY for searc
 npm run smoke          # one LLM round-trip → Zod-validated object
 npm test               # full suite, no network needed
 npm run cli -- "What is the current population of Tokyo?"   # full pipeline
+npm run eval -- --limit 3   # eval scorecard over the question set
 ```
+
+Every run writes `runs/<id>/trace.jsonl` (one JSON line per LLM call, tool call
+and round result) and `runs/<id>/state.json` (the verified claims and verdicts).
 
 Works with any OpenAI-compatible endpoint: set `OPENAI_BASE_URL` and `LLM_MODEL`
 in `.env` if you are not using OpenAI directly.

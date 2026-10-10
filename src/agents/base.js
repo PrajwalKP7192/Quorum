@@ -93,7 +93,7 @@ function trimTranscript(convo, budgetTokens = DEFAULT_TOKEN_BUDGET) {
   return convo;
 }
 
-async function runToolLoop({ llm, system, messages = [], tools = [], maxSteps = 8, temperature, tokenBudget = DEFAULT_TOKEN_BUDGET }) {
+async function runToolLoop({ llm, system, messages = [], tools = [], maxSteps = 8, temperature, tokenBudget = DEFAULT_TOKEN_BUDGET, trace }) {
   const convo = [{ role: 'system', content: system }, ...messages];
   const usageAcc = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
   let finalMessage = null;
@@ -103,7 +103,7 @@ async function runToolLoop({ llm, system, messages = [], tools = [], maxSteps = 
     const { message, usage } = await chatWithRepair(
       llm,
       convo,
-      { tools: tools.length ? tools.map(toOpenAITool) : undefined, temperature },
+      { tools: tools.length ? tools.map(toOpenAITool) : undefined, temperature, trace },
       tools.map((t) => t.name)
     );
     finalMessage = message;
@@ -121,9 +121,18 @@ async function runToolLoop({ llm, system, messages = [], tools = [], maxSteps = 
     convo.push(message);
     for (const call of calls) {
       const tool = tools.find((t) => t.name === call.function?.name);
+      const started = Date.now();
       const { ok, output } = tool
         ? await executeToolCall(tool, call)
         : { ok: false, output: `Error: unknown tool "${call.function?.name}"` };
+      if (trace) {
+        await trace.event('tool_call', {
+          name: call.function?.name,
+          args: call.function?.arguments,
+          durationMs: Date.now() - started,
+          ok,
+        });
+      }
       convo.push({
         role: 'tool',
         tool_call_id: call.id,

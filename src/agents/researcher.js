@@ -78,7 +78,7 @@ function renumberClaims(rawClaims, priorIds = new Set()) {
   return claims;
 }
 
-async function research({ question, llm, tools, maxSteps = 10, model, temperature = 0.2 }) {
+async function research({ question, llm, tools, maxSteps = 10, model, temperature = 0.2, trace }) {
   const { messages, usage: toolUsage, hitMaxSteps } = await runToolLoop({
     llm,
     system: SYSTEM,
@@ -86,6 +86,7 @@ async function research({ question, llm, tools, maxSteps = 10, model, temperatur
     tools,
     maxSteps,
     temperature,
+    trace,
   });
 
   if (hitMaxSteps) {
@@ -98,6 +99,7 @@ async function research({ question, llm, tools, maxSteps = 10, model, temperatur
     schema: ResearchOutput,
     model,
     temperature,
+    trace,
   });
 
   return {
@@ -112,7 +114,7 @@ const REVISE_SYSTEM = `${SYSTEM}
 
 This is a REVISE round. You previously produced a list of claims; the fact-checker rejected some. Fix the rejected claims using the feedback (usually: wrong number/date/name, or the source does not state the fact) — search again for better sources. If a claim cannot be fixed, drop it. Keep verified claims as they are (same wording) so their ids stay stable.`;
 
-async function revise({ priorClaims, failedVerdicts, llm, tools, maxSteps = 10, model, temperature = 0.2 }) {
+async function revise({ priorClaims, failedVerdicts, llm, tools, maxSteps = 10, model, temperature = 0.2, trace }) {
   const priorIds = new Set(priorClaims.map((c) => c.id));
   const { messages, usage: toolUsage, hitMaxSteps } = await runToolLoop({
     llm,
@@ -129,6 +131,7 @@ async function revise({ priorClaims, failedVerdicts, llm, tools, maxSteps = 10, 
     tools,
     maxSteps,
     temperature,
+    trace,
   });
 
   if (hitMaxSteps) {
@@ -141,6 +144,7 @@ async function revise({ priorClaims, failedVerdicts, llm, tools, maxSteps = 10, 
     schema: ResearchOutput,
     model,
     temperature,
+    trace,
   });
 
   return {

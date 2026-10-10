@@ -8,7 +8,7 @@ const { verifyClaim, fallbackVerdict } = require('./agents/fact-checker');
 
 async function verifyAll(
   claims,
-  { llm, tools, concurrency = config.VERIFY_CONCURRENCY, checkerModel, verifyOne = verifyClaim } = {}
+  { llm, tools, concurrency = config.VERIFY_CONCURRENCY, checkerModel, trace, verifyOne = verifyClaim } = {}
 ) {
   if (!Array.isArray(claims)) throw new Error('verifyAll: claims must be an array');
   const verdicts = new Array(claims.length);
@@ -20,7 +20,7 @@ async function verifyAll(
       if (i >= claims.length) return;
       const claim = claims[i];
       try {
-        verdicts[i] = await verifyOne({ claim, llm, tools, model: checkerModel });
+        verdicts[i] = await verifyOne({ claim, llm, tools, model: checkerModel, trace });
       } catch (err) {
         verdicts[i] = fallbackVerdict(claim, `verification crashed: ${err.message}`);
       }
