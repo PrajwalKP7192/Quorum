@@ -15,6 +15,9 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm test
+      - name: npm test (full output on failure)
+        run: |
+          npm test 2>&1 | tail -80
+          test "${PIPESTATUS[0]}" -eq 0
       - name: smoke fails cleanly without a key
         run: node scripts/smoke.js && exit 1 || test $? -eq 1
