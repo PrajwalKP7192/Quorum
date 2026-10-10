@@ -45,8 +45,6 @@ test('webSearch caches identical queries (one HTTP call)', async () => {
   await webSearch('same query');
   await webSearch('same query', { maxResults: 3 }); // different limit -> different cache key
   assert.equal(calls, 2);
-  const body = JSON.parse('{"max_results":3}');
-  assert.equal(body.max_results, 3);
 });
 
 test('webSearch sends the query with auth header', async () => {

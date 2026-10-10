@@ -43,3 +43,6 @@ in `.env` if you are not using OpenAI directly.
 - Everything is configurable via environment variables (`src/config.js`).
 - `structuredChat()` asks the model for JSON, validates it with Zod, and runs one
   repair round-trip with the validation errors if the first attempt fails.
+- Known risk: fetched web content is fed to the agents unfiltered — treat report
+  claims as untrusted until Phase 4's mechanical citation check and source
+  ranking harden this further.

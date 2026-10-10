@@ -169,3 +169,63 @@ test('checker concurrency and models flow through to verifyAll', async () => {
 test('runPipeline requires a question', async () => {
   await assert.rejects(runPipeline({ llm: {}, tools: [] }), /question is required/);
 });
+
+test('citation check warn mode reports but keeps verdicts', async () => {
+  const outDir = await tmpDir();
+  const fns = pipelineFns({
+    claimsByRound: [[claim('c1')]],
+    verdictsByRound: [[verdict('c1', 'supported')]],
+  });
+  const events = [];
+  const { state } = await runPipeline({
+    question: 'Q?',
+    llm: {},
+    tools: [],
+    outDir,
+    citationCheck: 'warn',
+    onEvent: (e, d) => events.push([e, d]),
+    citationCheckFn: async () => [{ claimId: 'c1', url: 'https://example.com/c1', ok: false, reason: 'quote-not-found-on-page' }],
+    ...fns,
+  });
+  assert.equal(state.verdicts[0].verdict, 'supported'); // warn does not demote
+  assert.ok(events.some(([e, d]) => e === 'citation-check:fail' && d.claimId === 'c1'));
+});
+
+test('citation check strict mode demotes unsupported quotes to unverifiable', async () => {
+  const outDir = await tmpDir();
+  const fns = pipelineFns({
+    claimsByRound: [[claim('c1')]],
+    verdictsByRound: [[verdict('c1', 'supported')]],
+  });
+  const { state } = await runPipeline({
+    question: 'Q?',
+    llm: {},
+    tools: [],
+    outDir,
+    maxRounds: 0, // the demotion is visible without a revise round
+    citationCheck: 'strict',
+    citationCheckFn: async () => [{ claimId: 'c1', url: 'https://example.com/c1', ok: false, reason: 'quote-not-found-on-page' }],
+    ...fns,
+  });
+  assert.equal(state.verdicts[0].verdict, 'unverifiable');
+  assert.match(state.verdicts[0].feedback, /citation check failed: quote-not-found-on-page/);
+});
+
+test('citation check off skips the check entirely', async () => {
+  const outDir = await tmpDir();
+  const fns = pipelineFns({ claimsByRound: [[claim('c1')]] });
+  let called = false;
+  await runPipeline({
+    question: 'Q?',
+    llm: {},
+    tools: [],
+    outDir,
+    citationCheck: 'off',
+    citationCheckFn: async () => {
+      called = true;
+      return [];
+    },
+    ...fns,
+  });
+  assert.equal(called, false);
+});

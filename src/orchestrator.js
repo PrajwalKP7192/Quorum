@@ -15,6 +15,7 @@ const config = require('./config');
 const { RunState } = require('./contracts');
 const { research, revise } = require('./agents/researcher');
 const { verifyAll } = require('./verify');
+const { checkCitations } = require('./tools/citation-check');
 const { synthesize } = require('./agents/synthesizer');
 
 const runsRoot = path.join(process.cwd(), 'runs');
@@ -35,12 +36,14 @@ async function runPipeline({
   synthesizerModel = config.LLM_MODEL,
   maxRounds = config.MAX_ROUNDS,
   concurrency = config.VERIFY_CONCURRENCY,
+  citationCheck = config.CITATION_CHECK,
   outDir,
   onEvent = () => {},
   // Injectable agent functions (tests pass fakes):
   researchFn = research,
   reviseFn = revise,
   verifyAllFn = verifyAll,
+  citationCheckFn = checkCitations,
   synthesizeFn = synthesize,
 }) {
   if (!question || typeof question !== 'string') throw new Error('runPipeline: question is required');
@@ -80,6 +83,24 @@ async function runPipeline({
 
     onEvent('verify:start', { round: round + 1, claims: state.claims.length });
     state.verdicts = await verifyAllFn(state.claims, { llm, tools, concurrency, checkerModel });
+
+    // Mechanical citation check (no LLM): do the quoted evidence quotes really
+    // appear on the cited pages? strict demotes failed supports to
+    // unverifiable so the revise loop re-researches them; warn only reports.
+    if (citationCheck !== 'off' && state.verdicts.some((v) => v.verdict === 'supported')) {
+      onEvent('citation-check:start', { mode: citationCheck });
+      const checks = await citationCheckFn(state.verdicts, {});
+      const bad = checks.filter((c) => !c.ok);
+      bad.forEach((c) => onEvent('citation-check:fail', c));
+      if (citationCheck === 'strict' && bad.length) {
+        const byId = new Map(bad.map((c) => [c.claimId, c]));
+        state.verdicts = state.verdicts.map((v) =>
+          v.verdict === 'supported' && byId.has(v.claimId)
+            ? { ...v, verdict: 'unverifiable', feedback: `citation check failed: ${byId.get(v.claimId).reason}` }
+            : v
+        );
+      }
+    }
 
     const failed = state.verdicts.filter((v) => v.verdict !== 'supported');
     roundsUsed = round + 1;

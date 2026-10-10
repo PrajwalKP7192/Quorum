@@ -138,3 +138,22 @@ test('renumberClaims dedupes repeated ids and drops invalid claims', () => {
   assert.deepEqual(claims.map((c) => c.id), ['c1', 'c2']);
   assert.equal(claims[1].text, 'Duplicate id.');
 });
+
+test('renumberClaims drops near-duplicate claims (same source, same fact reworded)', () => {
+  const S = [{ url: 'https://nippon.example', title: 'N' }];
+  const claims = renumberClaims([
+    { text: 'Tokyo prefecture had 14,002,534 residents in 2024, per the statistics bureau.', sources: S },
+    { text: 'Tokyo prefecture had 14,002,534 residents in 2024 according to official statistics.', sources: S },
+    { text: 'Tokyo prefecture had 14,002,534 residents in 2024, per the statistics bureau.', sources: [{ url: 'https://other.example', title: 'O' }] }, // same words, no shared source -> still a textual duplicate
+  ]);
+  assert.equal(claims.length, 1);
+});
+
+test('renumberClaims keeps distinct claims that merely share a source', () => {
+  const S = [{ url: 'https://nippon.example', title: 'N' }];
+  const claims = renumberClaims([
+    { text: 'Tokyo prefecture had 14,002,534 residents in 2024.', sources: S },
+    { text: 'Kanagawa prefecture ranked second in population in 2024.', sources: S },
+  ]);
+  assert.equal(claims.length, 2);
+});
