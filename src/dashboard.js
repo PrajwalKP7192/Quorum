@@ -100,7 +100,7 @@ function go(q) {
     }
     if (event === 'error') { $('error').textContent = data.message; $('error').hidden = false; es.close(); }
   };
-  es.onerror = () => es.close();
+  es.onerror = () => { es.close(); log('Connection closed — no result. The server may be busy or restarting; try again.', 'bad'); };
 }
 function log(t, cls) {
   const d = document.createElement('div');
