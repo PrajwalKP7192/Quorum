@@ -37,7 +37,10 @@ function htmlToText(html) {
       .replace(/<head[^>]*>[\s\S]*?<\/head\s*>/gi, ' ') // head never renders
       .replace(/<(script|style|noscript|svg|iframe)[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ') // non-content blocks
       .replace(/<(br|\/p|\/div|\/section|\/article|\/li|\/h[1-6]|\/tr)\s*\/?>/gi, '\n') // line breaks
-      .replace(/<[^>]+>/g, ' ') // remaining tags
+      // Tag strip that tolerates ">" inside quoted attribute values — without
+      // this, attribute JSON (e.g. Wikipedia's data-mw='...'>) leaks into text
+      // and crowds out the real content under the size cap.
+      .replace(/<("[^"]*"|'[^']*'|[^'">])*>/g, ' ') // remaining tags
   )
     .replace(/[ \t\f\v]+/g, ' ')
     .replace(/\s*\n\s*/g, '\n')
