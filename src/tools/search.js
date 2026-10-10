@@ -5,6 +5,56 @@
 // the orchestrator so a run never pays twice for the same query).
 const TAVILY_ENDPOINT = 'https://api.tavily.com/search';
 
+// Domain trust weighting for ranking: official/academic sources first.
+function domainWeight(url) {
+  let host;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return 0;
+  }
+  // gov/gov.uk/go.jp = government; edu/ac.uk (and regional edu TLDs) = academic
+  if (/\.(gov(\.uk)?|go\.jp|edu(\.[a-z]{2})?|ac\.uk|mil)$/.test(host)) return 3;
+  if (/(\.org|\.int)$/.test(host)) return 2;
+  return 1;
+}
+
+function normalizeUrl(url) {
+  try {
+    const u = new URL(url);
+    // strip trailing slash + tracking params; same page = same result
+    for (const p of [...u.searchParams.keys()]) {
+      if (/^utm_|^fbclid$|^ref_/i.test(p)) u.searchParams.delete(p);
+    }
+    return `${u.hostname.toLowerCase()}${u.pathname.replace(/\/+$/, '')}${u.search}`;
+  } catch {
+    return url;
+  }
+}
+
+function rankResults(results) {
+  const seen = new Set();
+  const unique = [];
+  for (const r of results) {
+    const key = normalizeUrl(r.url);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(r);
+  }
+  const recencyBonus = (r) => {
+    if (!r.publishedDate) return 0;
+    const ageDays = (Date.now() - Date.parse(r.publishedDate)) / 86400000;
+    return Number.isFinite(ageDays) && ageDays < 365 ? 1 : 0;
+  };
+  // relevance first within a trust tier; recency breaks near-ties
+  return unique.sort(
+    (a, b) =>
+      domainWeight(b.url) - domainWeight(a.url) ||
+      (b.relevance ?? 0) - (a.relevance ?? 0) ||
+      recencyBonus(b) - recencyBonus(a)
+  );
+}
+
 function createSearch({
   apiKey = process.env.TAVILY_API_KEY,
   fetchImpl = fetch,
@@ -50,17 +100,21 @@ function createSearch({
     }
 
     const data = await res.json();
-    const results = (data.results || []).map((r) => {
-      // Cap content: tool results ride along in every subsequent LLM call, so
-      // oversized blobs burn through free-tier token-per-minute limits.
-      const content = (r.content || '').slice(0, 500);
-      return {
-        title: r.title || 'Untitled',
-        url: r.url,
-        snippet: content.slice(0, 200),
-        content,
-      };
-    });
+    const results = rankResults(
+      (data.results || []).map((r) => {
+        // Cap content: tool results ride along in every subsequent LLM call, so
+        // oversized blobs burn through free-tier token-per-minute limits.
+        const content = (r.content || '').slice(0, 500);
+        return {
+          title: r.title || 'Untitled',
+          url: r.url,
+          snippet: content.slice(0, 200),
+          content,
+          relevance: r.score ?? 0,
+          publishedDate: r.published_date || null,
+        };
+      })
+    ).map(({ relevance, publishedDate, ...rest }) => rest); // agents see the lean shape
     cache.set(cacheKey, results);
     return results;
   }

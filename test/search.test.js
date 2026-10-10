@@ -65,3 +65,26 @@ test('webSearch raises a clear error on non-200', async () => {
   const webSearch = createSearch({ apiKey: 'k', fetchImpl });
   await assert.rejects(webSearch('q'), /Tavily API error 429.*rate limited/s);
 });
+
+test('webSearch dedupes URLs and ranks official domains first', async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      results: [
+        { title: 'Blog', url: 'https://blog.example.com/tokyo', content: 'b', score: 0.9 },
+        { title: 'Stats Bureau', url: 'https://www.stat.go.jp/english/data/tokyo', content: 'g', score: 0.6 },
+        { title: 'Blog (tracking copy)', url: 'https://blog.example.com/tokyo?utm_source=x', content: 'b2', score: 0.8 },
+        { title: 'Blog (trailing slash)', url: 'https://blog.example.com/tokyo/', content: 'b3', score: 0.7 },
+      ],
+    }),
+  });
+  const webSearch = createSearch({ apiKey: 'k', fetchImpl });
+  const results = await webSearch('tokyo');
+  // the two tracking/trailing-slash copies collapse into the first blog entry
+  assert.equal(results.length, 2);
+  // .go.jp outranks the blog despite lower relevance
+  assert.equal(results[0].url, 'https://www.stat.go.jp/english/data/tokyo');
+  // lean shape: internal ranking fields are stripped
+  assert.deepEqual(Object.keys(results[0]).sort(), ['content', 'snippet', 'title', 'url']);
+});

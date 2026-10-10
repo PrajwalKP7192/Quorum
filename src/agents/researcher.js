@@ -14,8 +14,9 @@ Process:
 
 Rules:
 - Every claim needs a source: the exact URL and page title from your tool results.
+- Each claim must be a DISTINCT fact. Never restate the same fact with different wording; state it once, with the best source you have.
 - Write claims as complete declarative sentences with names, numbers and dates where possible.
-- Prefer primary or authoritative sources. Never invent a URL.
+- Prefer primary or authoritative sources (official statistics, government, academic). Never invent a URL.
 - Do not include your opinions or interpretations as claims.
 - Once you have enough material, stop calling tools; you will be asked for the final JSON.`;
 
