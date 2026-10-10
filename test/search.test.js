@@ -10,7 +10,7 @@ function tavilyResponse() {
     status: 200,
     json: async () => ({
       results: [
-        { title: 'Result A', url: 'https://a.example.com', content: 'A'.repeat(500) },
+        { title: 'Result A', url: 'https://a.example.com', content: 'A'.repeat(1400) },
         { title: 'Result B', url: 'https://b.example.com', content: 'short' },
       ],
     }),
@@ -29,7 +29,8 @@ test('webSearch maps Tavily results to { title, url, snippet, content }', async 
   assert.equal(results.length, 2);
   assert.deepEqual(Object.keys(results[0]).sort(), ['content', 'snippet', 'title', 'url']);
   assert.equal(results[0].url, 'https://a.example.com');
-  assert.equal(results[0].snippet.length, 300); // content truncated for the snippet
+  assert.equal(results[0].content.length, 500); // content capped for token budget
+  assert.equal(results[0].snippet.length, 200); // content truncated for the snippet
   assert.equal(results[1].content, 'short');
 });
 

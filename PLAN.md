@@ -1,7 +1,7 @@
 # Quorum — Roadmap & Implementation Plan
 
 > Canonical planning document. Status markers updated as phases complete.
-> Last updated: 2026-10-08 (Phases 0–3 code-complete; live run pending API keys).
+> Last updated: 2026-10-10 (Phases 0–3 live-validated on Groq free tier + Tavily).
 
 ## 1. What Quorum is
 
@@ -89,11 +89,21 @@ Model assignment (env-overridable): strong model for researcher/synthesizer
       (`RunState.dropped`), `src/agents/synthesizer.js` (report from supported
       claims only, `[cN](url)` inline citations, "Excluded claims" appendix),
       CLI verdict table + `--rounds N` / `--out FILE`. 48 tests green, no network.
-- [ ] **Live validation of Phases 1–3** — blocked on keys: with
-      `OPENAI_API_KEY` + `TAVILY_API_KEY` in `.env`, run
-      `node src/cli.js "What is the current population of Tokyo?"` and confirm:
-      real citations, verdicts with verbatim quotes, contradicted claims actually
-      revised/dropped, `runs/<id>/quorum-report.md` written. Then tick the boxes.
+- [x] **Live validation of Phases 1–3** (2026-10-10, Groq free tier + Tavily):
+      `node src/cli.js "What is the current population of Tokyo?" --rounds 0` →
+      5 claims, **5 supported / 0 failed**, report with inline `[cN](url)` citations
+      and verbatim evidence quotes (nippon.com / stat.go.jp), artifacts in
+      `runs/2026-10-10T16-42-32-161Z/`. Answer: 14,002,534 (Tokyo prefecture).
+      Known quality gap for Phase 4: researcher emitted near-duplicate claims
+      (all 5 were the same fact).
+- **Free-tier hardening added during live testing** (all regression-tested, 55 tests):
+      429 retry with provider hint parsing (seconds + minutes), transient network
+      retries, transcript trimming to fit 8K TPM request caps, tool-result size
+      caps, recovery from provider-side tool-call rejections (hallucinated tool
+      names, narrated tool calls, tools-blocked-on-final-call), repair temperature
+      escalation. Default model: `openai/gpt-oss-20b` (120b exhausts its 200K/day
+      free bucket in ~2 runs; 20b TPM is also 8K — a full run takes ~10 min, mostly
+      rate-limit waits).
 
 ## 4. Phases
 

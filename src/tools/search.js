@@ -50,12 +50,17 @@ function createSearch({
     }
 
     const data = await res.json();
-    const results = (data.results || []).map((r) => ({
-      title: r.title || 'Untitled',
-      url: r.url,
-      snippet: (r.content || '').slice(0, 300),
-      content: r.content || '',
-    }));
+    const results = (data.results || []).map((r) => {
+      // Cap content: tool results ride along in every subsequent LLM call, so
+      // oversized blobs burn through free-tier token-per-minute limits.
+      const content = (r.content || '').slice(0, 500);
+      return {
+        title: r.title || 'Untitled',
+        url: r.url,
+        snippet: content.slice(0, 200),
+        content,
+      };
+    });
     cache.set(cacheKey, results);
     return results;
   }

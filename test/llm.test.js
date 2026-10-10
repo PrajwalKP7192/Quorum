@@ -99,6 +99,77 @@ test('chat surfaces HTTP errors with status and body', async () => {
   );
 });
 
+test('chat retries transient network errors and succeeds', async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    if (calls === 1) {
+      const e = new Error('fetch failed');
+      e.cause = { code: 'UND_ERR_CONNECT_TIMEOUT' };
+      throw e;
+    }
+    return okResponse('{"answer": "ok"}');
+  };
+  const { data } = await llm.structuredChat({
+    messages: [{ role: 'user', content: 'q' }],
+    schema: Answer,
+    apiKey: 'test-key',
+    fetchImpl,
+    retryBaseDelayMs: 1,
+  });
+  assert.equal(data.answer, 'ok');
+  assert.equal(calls, 2);
+});
+
+test('structuredChat recovers when tools are blocked on the final call (Groq tool_use_failed)', async () => {
+  let calls = 0;
+  const fetchImpl = async (url, opts) => {
+    calls++;
+    if (calls === 1) {
+      return {
+        ok: false,
+        status: 400,
+        text: async () =>
+          JSON.stringify({
+            error: {
+              code: 'tool_use_failed',
+              message: 'Tool choice is none, but model called a tool',
+              failed_generation: '{"name": "web_open", "arguments": {}}',
+            },
+          }),
+      };
+    }
+    return okResponse('{"answer": "recovered"}');
+  };
+  const { data } = await llm.structuredChat({
+    messages: [{ role: 'user', content: 'q' }],
+    schema: Answer,
+    apiKey: 'test-key',
+    fetchImpl,
+    retryBaseDelayMs: 1,
+  });
+  assert.equal(data.answer, 'recovered');
+  assert.equal(calls, 2);
+});
+
+test('chat escalates temperature on repair retries', async () => {
+  const bodies = [];
+  const fetchImpl = async (url, opts) => {
+    bodies.push(JSON.parse(opts.body));
+    if (bodies.length === 1) return okResponse('{"answer": 123}'); // fails schema
+    return okResponse('{"answer": "fine"}');
+  };
+  await llm.structuredChat({
+    messages: [{ role: 'user', content: 'q' }],
+    schema: Answer,
+    apiKey: 'test-key',
+    fetchImpl,
+    temperature: 0,
+  });
+  assert.equal(bodies[0].temperature, 0);
+  assert.ok(bodies[1].temperature >= 0.3, 'repair attempt should raise temperature');
+});
+
 test('chat throws a clear error without an API key', async () => {
   await assert.rejects(
     llm.chat({ messages: [{ role: 'user', content: 'q' }], apiKey: '', fetchImpl: async () => { throw new Error('should not fetch'); } }),

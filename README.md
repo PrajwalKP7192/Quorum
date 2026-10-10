@@ -7,16 +7,20 @@ routes the work and runs the verify-and-revise loop.
 
 The full roadmap and implementation plan lives in [PLAN.md](PLAN.md).
 
-## Status — Phase 3 (verify-and-revise loop)
+## Status — Phase 3 complete, live-validated
 
 - [x] Phase 0 — config, LLM client with Zod-validated structured output, agent contracts
 - [x] Phase 1 — one agent with web-search tools + CLI
 - [x] Phase 2 — two-agent pipeline (claims → verdicts)
 - [x] Phase 3 — feedback loop + synthesis
-- [ ] Phase 4 — quality hardening (mechanical citation checks)
+- [x] Live end-to-end run (2026-10-10): 5/5 claims verified, cited report generated
+- [ ] Phase 4 — quality hardening (mechanical citation checks, claim dedupe)
 - [ ] Phase 5 — tracing + eval scorecard
 
-Live end-to-end validation is pending API keys (see PLAN.md "Current status").
+Runs on any OpenAI-compatible endpoint; validated on Groq's free tier
+(`gpt-oss-20b`) with Tavily search. Free-tier quirks are handled: rate-limit
+retries with provider hints, transcript trimming for TPM caps, and recovery
+from provider-side tool-call parse rejections.
 
 ## Setup
 

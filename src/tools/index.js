@@ -5,7 +5,7 @@
 const { createSearch } = require('./search');
 const { fetchPage } = require('./fetch');
 
-function buildTools({ searchCache = new Map(), fetchImpl, maxChars } = {}) {
+function buildTools({ searchCache = new Map(), fetchImpl, maxChars = 3000 } = {}) {
   const webSearch = createSearch({ cache: searchCache, fetchImpl });
   return [
     {

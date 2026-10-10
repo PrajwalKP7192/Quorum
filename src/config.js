@@ -20,7 +20,7 @@ module.exports = {
   RESEARCHER_MODEL: process.env.RESEARCHER_MODEL || process.env.LLM_MODEL || 'gpt-4o-mini',
   CHECKER_MODEL: process.env.CHECKER_MODEL || process.env.LLM_MODEL || 'gpt-4o-mini',
   REQUEST_TIMEOUT_MS: positiveInt(process.env.REQUEST_TIMEOUT_MS, 60000),
-  MAX_REPAIR_ATTEMPTS: positiveInt(process.env.MAX_REPAIR_ATTEMPTS, 1),
+  MAX_REPAIR_ATTEMPTS: positiveInt(process.env.MAX_REPAIR_ATTEMPTS, 2),
 
   // Web search (Phase 1)
   TAVILY_API_KEY: process.env.TAVILY_API_KEY || '',

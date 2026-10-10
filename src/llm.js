@@ -10,6 +10,12 @@ const JSON_INSTRUCTION = [
   'The object must satisfy the schema described in the conversation.',
 ].join(' ');
 
+// Provider-side parse rejections (Groq 400s when a reasoning model narrates
+// instead of emitting JSON/tool calls) — retryable, model-output-side.
+const PARSE_FAILURE = /output_parse_failed|could not be parsed|failed_generation|tool_use_failed|Tool choice is none/i;
+const TOOL_USE_BLOCKED = /tool_use_failed|Tool choice is none/i;
+const NETWORK_FAILURE = /UND_ERR|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|fetch failed|network/i;
+
 function contentText(message) {
   if (!message) return '';
   if (typeof message.content === 'string') return message.content;
@@ -17,6 +23,24 @@ function contentText(message) {
     return message.content.map((part) => part?.text ?? '').join('');
   }
   return '';
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Groq's free tier returns 429 with "Please try again in Ns" / "in 1m10.4s"
+// hints; honor them (or exponential backoff) before giving up.
+const MAX_429_RETRIES = 6;
+
+function parseRetryHint(res, bodyText) {
+  const header = res.headers?.get?.('retry-after');
+  if (header) {
+    const n = Number(header);
+    if (Number.isFinite(n) && n >= 0) return n;
+    const date = Date.parse(header);
+    if (!Number.isNaN(date)) return Math.max(0, (date - Date.now()) / 1000);
+  }
+  const m = bodyText.match(/try again in (?:(\d+)m)?([\d.]+)s/i);
+  return m ? (m[1] ? Number(m[1]) * 60 : 0) + Number(m[2]) : null;
 }
 
 async function chat({
@@ -28,6 +52,7 @@ async function chat({
   apiKey = config.OPENAI_API_KEY,
   baseUrl = config.OPENAI_BASE_URL,
   timeoutMs = config.REQUEST_TIMEOUT_MS,
+  retryBaseDelayMs = 5000,
   fetchImpl = fetch,
 } = {}) {
   if (!apiKey) {
@@ -40,24 +65,51 @@ async function chat({
   const body = { model: model || config.LLM_MODEL, messages, temperature };
   if (tools && tools.length) body.tools = tools;
   if (maxTokens) body.max_tokens = maxTokens;
+  // gpt-oss models: fewer reasoning tokens — easier on TPM limits and less
+  // tool-call narration that Groq's server-side parser can reject.
+  if (/gpt-oss/i.test(body.model)) body.reasoning_effort = body.reasoning_effort || 'low';
 
   let res;
-  try {
-    res = await fetchImpl(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  } catch (err) {
-    throw new Error(`LLM request failed (${err.cause?.code || err.name}): ${err.message}`);
-  }
+  let attempt429 = 0;
+  while (true) {
+    try {
+      res = await fetchImpl(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (err) {
+      const code = err.cause?.code || err.name;
+      // Transient network errors (connect timeouts, resets) get the same
+      // retry budget as rate limits — Groq free-tier load causes both.
+      if (attempt429 < MAX_429_RETRIES && NETWORK_FAILURE.test(`${code} ${err.message}`)) {
+        const waitMs = retryBaseDelayMs + Math.random() * 3000;
+        console.error(`llm: network error (${code}) — retrying in ${(waitMs / 1000).toFixed(1)}s ...`);
+        await sleep(waitMs);
+        attempt429++;
+        continue;
+      }
+      throw new Error(`LLM request failed (${code}): ${err.message}`);
+    }
 
-  if (!res.ok) {
+    if (res.ok) break;
+
     const text = await res.text().catch(() => '');
+    if (res.status === 429 && attempt429 < MAX_429_RETRIES) {
+      const hint = parseRetryHint(res, text);
+      const waitMs = Math.min(
+        (hint ?? Math.min(2 ** attempt429 * 5, 30)) * 1000 + Math.random() * 1000,
+        90000
+      );
+      console.error(`llm: rate limited (429) — retrying in ${(waitMs / 1000).toFixed(1)}s ...`);
+      await sleep(waitMs);
+      attempt429++;
+      continue;
+    }
     throw new Error(`LLM API error ${res.status}: ${text.slice(0, 500)}`);
   }
 
@@ -126,15 +178,35 @@ async function structuredChat({
 
   let lastError;
   for (let attempt = 0; attempt <= maxRepairAttempts; attempt++) {
-    const { message, usage } = await chat({
-      messages: convo,
-      model,
-      temperature,
-      apiKey,
-      baseUrl,
-      timeoutMs,
-      fetchImpl,
-    });
+    let message;
+    let usage;
+    try {
+      ({ message, usage } = await chat({
+        messages: convo,
+        model,
+        // Escalate temperature on retries: at temp 0 the same input would
+        // deterministically produce the same rejected output.
+        temperature: attempt > 0 ? Math.max(temperature, 0.3) : temperature,
+        apiKey,
+        baseUrl,
+        timeoutMs,
+        fetchImpl,
+      }));
+    } catch (err) {
+      // Groq can reject an unparseable model turn with a 400 before we ever
+      // see output — retry it inside the same repair budget.
+      if (attempt < maxRepairAttempts && PARSE_FAILURE.test(err.message)) {
+        lastError = err;
+        convo.push({
+          role: 'user',
+          content: TOOL_USE_BLOCKED.test(err.message)
+            ? 'Tools are disabled for this request. Do not call any tools. Respond with the JSON object as plain text only.'
+            : 'Your last output could not be parsed by the API. Respond again with the JSON object only.',
+        });
+        continue;
+      }
+      throw err;
+    }
     const text = contentText(message);
 
     let value;
