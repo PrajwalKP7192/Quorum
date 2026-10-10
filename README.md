@@ -57,7 +57,7 @@ Design principles:
 - [x] Live end-to-end run (2026-10-10): 5/5 claims verified, cited report generated
 - [x] Phase 4 — quality hardening (mechanical citation checks, claim dedupe, source ranking)
 - [x] Phase 5 — tracing (JSONL per run) + eval scorecard (`npm run eval`)
-- [ ] Optional: Phase 6 — web service + live dashboard
+- [x] Phase 6 — live web dashboard (`npm start`, zero added dependencies)
 
 ## Setup
 
@@ -68,7 +68,12 @@ npm test               # 68 tests, no network or API keys needed
 npm run smoke          # one LLM round-trip → Zod-validated object
 npm run cli -- "What is the current population of Tokyo?"   # full pipeline
 npm run eval -- --limit 3   # eval scorecard over the question set
+npm start                   # live dashboard at http://localhost:8080
 ```
+
+The dashboard (`npm start`) streams the pipeline live over Server-Sent Events —
+watch claims appear, verdicts land and rounds turn — and lists past runs.
+Built on plain `node:http`; still only one runtime dependency (`zod`).
 
 Works with any OpenAI-compatible endpoint: set `OPENAI_BASE_URL` and `LLM_MODEL`
 in `.env` if you are not using OpenAI directly. Validated on Groq's free tier
