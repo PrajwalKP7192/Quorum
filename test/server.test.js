@@ -28,7 +28,7 @@ async function withRunsDir() {
 }
 
 test('serves the dashboard page at /', async () => {
-  const server = createServer({ runsRootDir: await withRunsDir() });
+  const server = createServer({ runsRootDir: await withRunsDir(), toolsFn: () => [] });
   try {
     const base = await listen(server);
     const res = await fetch(base + '/');
@@ -43,7 +43,7 @@ test('serves the dashboard page at /', async () => {
 
 test('lists and serves past runs', async () => {
   const runsDir = await withRunsDir();
-  const server = createServer({ runsRootDir: runsDir });
+  const server = createServer({ runsRootDir: runsDir, toolsFn: () => [] });
   try {
     const base = await listen(server);
     const runs = await (await fetch(base + '/runs')).json();
@@ -61,6 +61,7 @@ test('lists and serves past runs', async () => {
 test('streams pipeline events over SSE and ends with the report', async () => {
   const server = createServer({
     runsRootDir: await withRunsDir(),
+    toolsFn: () => [],
     runPipelineFn: async ({ question, onEvent }) => {
       onEvent('round:start', { round: 1, total: 1 });
       onEvent('verify:done', { round: 1, supported: 1, failed: 0 });

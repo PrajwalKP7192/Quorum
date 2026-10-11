@@ -32,7 +32,7 @@ function sse(res, event, data) {
   res.write(`data: ${JSON.stringify({ event, data })}\n\n`);
 }
 
-function createServer({ runsRootDir = runsRoot, runPipelineFn = runPipeline, llmClient = llm } = {}) {
+function createServer({ runsRootDir = runsRoot, runPipelineFn = runPipeline, llmClient = llm, toolsFn = buildTools } = {}) {
   let running = false; // one pipeline at a time — the free tier cannot take more
 
   return http.createServer(async (req, res) => {
@@ -72,7 +72,7 @@ function createServer({ runsRootDir = runsRoot, runPipelineFn = runPipeline, llm
           const { state } = await runPipelineFn({
             question,
             llm: llmClient,
-            tools: buildTools({ searchCache: new Map() }),
+            tools: toolsFn({ searchCache: new Map() }),
             researcherModel: config.RESEARCHER_MODEL,
             checkerModel: config.CHECKER_MODEL,
             synthesizerModel: config.LLM_MODEL,

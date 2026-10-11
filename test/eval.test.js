@@ -40,6 +40,7 @@ test('totalTokens sums tool loop + structured + synthesis', () => {
 test('runEval scores coverage and citation validity over all questions', async () => {
   const score = await runEval({
     questions: QUESTIONS,
+    buildToolsFn: () => [],
     runPipelineFn: fakePipeline(),
     checkCitationsFn: async () => [{ claimId: 'c1', ok: true, reason: 'quote-found' }],
   });
@@ -55,6 +56,7 @@ test('runEval counts a miss when no supported claim matches, and tolerates run e
   let first = true;
   const score = await runEval({
     questions: QUESTIONS,
+    buildToolsFn: () => [],
     runPipelineFn: async (args) => {
       if (first) {
         first = false;

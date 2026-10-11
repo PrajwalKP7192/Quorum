@@ -26,12 +26,12 @@ function totalTokens(usage) {
   return (usage?.rounds ?? []).reduce((sum, u) => sum + perRound(u), 0) + (usage?.synthesis?.total_tokens ?? 0);
 }
 
-async function evalOne(q, { maxRounds, concurrency, runPipelineFn, checkCitationsFn }) {
+async function evalOne(q, { maxRounds, concurrency, runPipelineFn, checkCitationsFn, buildToolsFn }) {
   const started = Date.now();
   const { state, usage } = await runPipelineFn({
     question: q.question,
     llm,
-    tools: buildTools({ searchCache: new Map() }),
+    tools: buildToolsFn({ searchCache: new Map() }),
     maxRounds,
     concurrency,
     researcherModel: config.RESEARCHER_MODEL,
@@ -74,13 +74,13 @@ function summarize(results) {
   };
 }
 
-async function runEval({ questions, maxRounds = 0, concurrency = 2, limit, runPipelineFn = runPipeline, checkCitationsFn = checkCitations } = {}) {
+async function runEval({ questions, maxRounds = 0, concurrency = 2, limit, runPipelineFn = runPipeline, checkCitationsFn = checkCitations, buildToolsFn = buildTools } = {}) {
   const selected = limit ? questions.slice(0, limit) : questions;
   const results = [];
   for (const [i, q] of selected.entries()) {
     process.stderr.write(`[${i + 1}/${selected.length}] ${q.question}\n`);
     try {
-      results.push(await evalOne(q, { maxRounds, concurrency, runPipelineFn, checkCitationsFn }));
+      results.push(await evalOne(q, { maxRounds, concurrency, runPipelineFn, checkCitationsFn, buildToolsFn }));
     } catch (err) {
       results.push({ question: q.question, ok: false, error: String(err.message).slice(0, 200) });
     }
