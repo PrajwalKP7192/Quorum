@@ -77,29 +77,13 @@ async function showRun(id) {
   reset();
   $('q').value = r.question;
   history.pushState(null, '', '/runs/' + id);
-  const byId = Object.fromEntries((r.claims || []).map((c) => [c.id, c]));
-  $('feed').innerHTML = (r.verdicts || []).map((v) => card(v, null, true) +
-    '<div class="quote">' + esc((byId[v.claimId] ? '' : '') ) +
-    '</div>').join('');
-  // evidence quotes: render under each card from the verdict's own quote
-  $('feed').innerHTML = (r.verdicts || []).map((v) =>
-    card(v, byId[v.claimId] ? byId[v.claimId].text : '', true).replace('</div></div>', '</div></div>')
-  ).join('');
-  renderQuotes(r.verdicts);
+  const byId = Object.fromEntries((r.claims || []).map((c) => [c.id, c.text]));
+  $('feed').innerHTML = (r.verdicts || []).map((v) => card(v, byId[v.claimId] || '', true)).join('');
   renderClaimsTable(r.claims || [], r.verdicts || []);
   if (r.report) { $('report').innerHTML = mdToHtml(r.report); $('report').hidden = false; $('report').dataset.md = r.report; }
   loadTrace(id);
   for (const el of Object.values(STAGES)) el.classList.add('done');
   window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function renderQuotes(verdicts) {
-  verdicts.forEach((v) => {
-    const el = $('feed').querySelector('[data-claim="' + v.claimId + '"] .claim-src');
-    if (el && v.evidenceQuote) {
-      el.insertAdjacentHTML('beforeend', '<div class="fb">“' + esc(v.evidenceQuote) + '”</div>');
-    }
-  });
 }
 
 function renderClaimsTable(claims, verdicts) {
@@ -134,8 +118,8 @@ async function loadTrace(id) {
     if (e.type === 'llm_call') detail = e.model + ' · ' + e.latencyMs + 'ms · ' + (e.prompt_tokens ?? '?') + '+' + (e.completion_tokens ?? '?') + ' tok' + (e.retries ? ' · ' + e.retries + ' retries' : '');
     else if (e.type === 'tool_call') detail = e.name + ' · ' + e.durationMs + 'ms' + (e.ok ? '' : ' · FAILED');
     else if (e.type === 'agent_event') detail = 'round ' + e.round + ': ' + e.claims + ' claims, ' + e.supported + ' supported, ' + e.failed + ' failed';
-    else detail = esc(e.question || '');
-    return '<div class="trow ' + (e.ok === false ? 'bad' : '') + '"><span class="ttime">' + dt + 's</span><span>' + (ICON[e.type] || '·') + '</span><span class="ttype">' + e.type + '</span><span class="tdim">' + esc(detail) + '</span></div>';
+    else detail = e.question || '';
+    return '<div class="trow ' + (e.ok === false ? 'bad' : '') + '"><span class="ttime">' + dt + 's</span><span>' + (ICON[e.type] || '·') + '</span><span class="ttype">' + esc(e.type) + '</span><span class="tdim">' + esc(detail) + '</span></div>';
   };
   const shown = events.length > 60 ? events.slice(0, 60) : events;
   $('trace').innerHTML = '<h2 class="sec">Trace (' + events.length + ' events)</h2>' +
