@@ -32,6 +32,11 @@ module.exports = {
   // Quality (Phase 4)
   CITATION_CHECK: process.env.CITATION_CHECK || 'warn',
 
+  // Phase 7 extensions
+  SKEPTIC: process.env.SKEPTIC || 'on',
+  PARALLEL_RESEARCH: process.env.PARALLEL_RESEARCH || 'off',
+  RESEARCH_CONCURRENCY: positiveInt(process.env.RESEARCH_CONCURRENCY, 3),
+
   // Service (Phase 6)
   PORT: positiveInt(process.env.PORT, 8080),
 };

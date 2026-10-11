@@ -36,6 +36,13 @@ const ResearchOutput = z.object({
   claims: z.array(Claim),
 });
 
+// The skeptic agent's strongest honest objection to a supported claim,
+// raised before synthesis so the report can address it.
+const Objection = z.object({
+  claimId: z.string(),
+  objection: z.string().min(1),
+});
+
 // Everything known about one run; persisted to runs/<id>/state.json.
 // `dropped` accumulates claims removed by revise rounds (for the report
 // appendix), keyed by their original ids.
@@ -46,7 +53,8 @@ const RunState = z.object({
   claims: z.array(Claim).default([]),
   verdicts: z.array(Verdict).default([]),
   dropped: z.array(Claim).default([]),
+  objections: z.array(Objection).default([]),
   report: z.string().optional(),
 });
 
-module.exports = { Source, Claim, Verdict, ResearchOutput, RunState };
+module.exports = { Source, Claim, Verdict, ResearchOutput, Objection, RunState };

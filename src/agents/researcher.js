@@ -2,6 +2,7 @@
 
 // Researcher v0: decomposes a question, searches the web with tools, then
 // emits { subQuestions, claims } validated against src/contracts.js.
+const { z } = require('zod');
 const { runToolLoop } = require('./base');
 const { ResearchOutput, Claim } = require('../contracts');
 
@@ -114,6 +115,70 @@ const REVISE_SYSTEM = `${SYSTEM}
 
 This is a REVISE round. You previously produced a list of claims; the fact-checker rejected some. Fix the rejected claims using the feedback (usually: wrong number/date/name, or the source does not state the fact) — search again for better sources. If a claim cannot be fixed, drop it. Keep verified claims as they are (same wording) so their ids stay stable.`;
 
+// Decompose-only pass: just the sub-questions, no claims.
+const DecomposeOutput = z.object({ subQuestions: z.array(z.string().min(1)).min(1) });
+
+// Per-sub-question research claims (fan-out worker output).
+const SubResearchOutput = z.object({ claims: z.array(z.object({
+  text: z.string().min(1),
+  sources: z.array(z.object({ url: z.url(), title: z.string().min(1).default('Untitled') })).min(1),
+})) });
+
+// Phase 7: one researcher per sub-question, run concurrently and merged.
+// Costs ~#subQuestions LLM calls per round — enable with PARALLEL_RESEARCH=on
+// when the rate limit allows (paid tier or patient free tier).
+async function researchParallel({ question, llm, tools, maxSteps = 6, model, temperature = 0.2, concurrency = 3, trace }) {
+  const { data: decomp } = await llm.structuredChat({
+    system: 'You decompose research questions. Respond with JSON only.',
+    messages: [{
+      role: 'user',
+      content: `Decompose this question into 2-5 concrete, self-contained sub-questions that together fully answer it: "${question}"`,
+    }],
+    schema: DecomposeOutput,
+    model,
+    temperature,
+    trace,
+  });
+  const subQuestions = decomp.subQuestions;
+
+  const subClaims = new Array(subQuestions.length);
+  let next = 0;
+  const worker = async () => {
+    while (true) {
+      const i = next++;
+      if (i >= subQuestions.length) return;
+      const sub = subQuestions[i];
+      try {
+        const { messages } = await runToolLoop({
+          llm,
+          system: SYSTEM,
+          messages: [{ role: 'user', content: sub }],
+          tools,
+          maxSteps,
+          temperature,
+          trace,
+        });
+        const { data } = await llm.structuredChat({
+          system: 'You convert research notes into the requested JSON schema. Use only facts from the conversation.',
+          messages: [...messages, { role: 'user', content: OUTPUT_ASK }],
+          schema: SubResearchOutput,
+          model,
+          temperature,
+          trace,
+        });
+        subClaims[i] = data.claims;
+      } catch (err) {
+        console.error(`researcher: sub-question "${sub.slice(0, 50)}" failed (${err.message.slice(0, 80)})`);
+        subClaims[i] = [];
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, subQuestions.length)) }, worker));
+
+  const claims = renumberClaims(subClaims.flat());
+  return { subQuestions, claims, usage: null };
+}
+
 async function revise({ priorClaims, failedVerdicts, llm, tools, maxSteps = 10, model, temperature = 0.2, trace }) {
   const priorIds = new Set(priorClaims.map((c) => c.id));
   const { messages, usage: toolUsage, hitMaxSteps } = await runToolLoop({
@@ -155,4 +220,4 @@ async function revise({ priorClaims, failedVerdicts, llm, tools, maxSteps = 10, 
   };
 }
 
-module.exports = { research, revise, renumberClaims, SYSTEM };
+module.exports = { research, revise, researchParallel, renumberClaims, SYSTEM };

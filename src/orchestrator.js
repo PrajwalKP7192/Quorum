@@ -14,10 +14,11 @@ const path = require('node:path');
 const config = require('./config');
 const { RunState } = require('./contracts');
 const { createTrace } = require('./trace');
-const { research, revise } = require('./agents/researcher');
+const { research, revise, researchParallel } = require('./agents/researcher');
 const { verifyAll } = require('./verify');
 const { checkCitations } = require('./tools/citation-check');
 const { synthesize } = require('./agents/synthesizer');
+const { skeptic } = require('./agents/skeptic');
 
 const runsRoot = path.join(process.cwd(), 'runs');
 
@@ -38,13 +39,16 @@ async function runPipeline({
   maxRounds = config.MAX_ROUNDS,
   concurrency = config.VERIFY_CONCURRENCY,
   citationCheck = config.CITATION_CHECK,
+  skepticEnabled = config.SKEPTIC !== 'off',
+  researchConcurrency = config.RESEARCH_CONCURRENCY,
   outDir,
   onEvent = () => {},
   // Injectable agent functions (tests pass fakes):
-  researchFn = research,
+  researchFn = config.PARALLEL_RESEARCH === 'on' ? researchParallel : research,
   reviseFn = revise,
   verifyAllFn = verifyAll,
   citationCheckFn = checkCitations,
+  skepticFn = skeptic,
   synthesizeFn = synthesize,
 }) {
   if (!question || typeof question !== 'string') throw new Error('runPipeline: question is required');
@@ -68,7 +72,7 @@ async function runPipeline({
 
     const result =
       round === 0
-        ? await researchFn({ question, llm, tools, model: researcherModel, trace })
+        ? await researchFn({ question, llm, tools, model: researcherModel, trace, concurrency: researchConcurrency })
         : await reviseFn({ priorClaims, failedVerdicts, llm, tools, model: researcherModel, trace });
     state.subQuestions = result.subQuestions;
     state.claims = result.claims;
@@ -126,6 +130,13 @@ async function runPipeline({
   }
 
   onEvent('report:start', {});
+  if (skepticEnabled && state.verdicts.some((v) => v.verdict === 'supported')) {
+    onEvent('skeptic:start', {});
+    const { objections } = await skepticFn({ state, llm, tools, trace });
+    state.objections = objections;
+    onEvent('skeptic:done', { objections: objections.length });
+    await trace.event('agent_event', { phase: 'skeptic', objections: objections.length });
+  }
   const synth = await synthesizeFn({ state, llm, model: synthesizerModel, trace });
   state.report = synth.report;
   usage.synthesis = synth.usage ?? null;

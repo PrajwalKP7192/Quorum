@@ -80,6 +80,8 @@ async function main() {
       }
       if (event === 'verify:done') console.error(`${data.supported} supported, ${data.failed} failed`);
       if (event === 'rounds:exhausted') console.error(`max rounds reached; ${data.failed} claim(s) remain unverified`);
+      if (event === 'skeptic:start') console.error('skeptic review ...');
+      if (event === 'skeptic:done') console.error(`skeptic: ${data.objections} objection(s)`);
       if (event === 'report:start') console.error('synthesizing report ...');
       if (event === 'report:done') console.error(`report: ${data.supported} supported claims`);
     },

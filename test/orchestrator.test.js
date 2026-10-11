@@ -166,6 +166,45 @@ test('checker concurrency and models flow through to verifyAll', async () => {
   assert.equal(fns.calls.research[0].model, 'big-1');
 });
 
+test('skeptic pass runs before synthesis and objections reach state + synthesizer', async () => {
+  const outDir = await tmpDir();
+  const fns = pipelineFns({
+    claimsByRound: [[claim('c1')]],
+    verdictsByRound: [[verdict('c1', 'supported')]],
+  });
+  let skepticCalled = 0;
+  const { state } = await runPipeline({
+    question: 'Q?',
+    llm: {},
+    tools: [],
+    outDir,
+    skepticEnabled: true,
+    skepticFn: async () => {
+      skepticCalled++;
+      return { objections: [{ claimId: 'c1', objection: 'Largest by which measure?' }] };
+    },
+    ...fns,
+  });
+  assert.equal(skepticCalled, 1);
+  assert.deepEqual(state.objections, [{ claimId: 'c1', objection: 'Largest by which measure?' }]);
+  assert.deepEqual(fns.calls.synthesize[0].state.objections[0].objection, 'Largest by which measure?');
+});
+
+test('skeptic can be disabled', async () => {
+  const outDir = await tmpDir();
+  const fns = pipelineFns({ claimsByRound: [[claim('c1')]] });
+  await runPipeline({
+    question: 'Q?',
+    llm: {},
+    tools: [],
+    outDir,
+    skepticEnabled: false,
+    skepticFn: async () => { throw new Error('skeptic must not run'); },
+    ...fns,
+  });
+  assert.deepEqual(fns.calls.synthesize[0].state.objections, []);
+});
+
 test('runPipeline requires a question', async () => {
   await assert.rejects(runPipeline({ llm: {}, tools: [] }), /question is required/);
 });

@@ -218,13 +218,28 @@ live (claims appearing, verdicts landing, rounds turning).
 
 **Exit:** demo-able in a browser. **Effort:** 2–3 days.
 
-### Phase 7 — Extensions (pick later)
+### Phase 7 — Extensions
 
-- Skeptic agent arguing against claims before synthesis.
-- Parallel researcher fan-out (one researcher per sub-question).
-- `search_docs` tool wrapping rag-app's BM25 — researcher works over your own corpus.
+**Done 2026-10-11:**
+
+- [x] **Skeptic agent** (`src/agents/skeptic.js`) — after the loop converges, a
+      fourth agent challenges every supported claim (counter-evidence via tools,
+      scope gaps, source reliability) and raises at most one honest objection per
+      claim. Objections live in `RunState.objections`, are shown in the CLI and
+      dashboard claims table, and the synthesizer must address them in a
+      "Counter-considerations" section. `SKEPTIC=on|off` (default on); fails soft.
+- [x] **Parallel researcher fan-out** (`researchParallel`) — decompose once, then
+      one researcher per sub-question under a concurrency pool; merged claims are
+      deduped and renumbered. `PARALLEL_RESEARCH=on|off` (default off — multiplies
+      LLM calls per run, best on a paid tier), `RESEARCH_CONCURRENCY=3`.
+- [x] **Docker** (`Dockerfile` + `.dockerignore`) — node:24-alpine, non-root user,
+      keys via env at runtime: `docker build -t quorum . && docker run -p 8080:8080
+      --env-file .env quorum`.
+
+**Still open (pick later):**
+
+- `search_docs` tool wrapping a BM25 index — researcher works over your own corpus.
 - Human approval gate before the final report.
-- Docker.
 
 ## 5. Cross-cutting concerns
 

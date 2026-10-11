@@ -12,6 +12,7 @@ Rules:
 - Use ONLY the provided supported claims. Never add facts, numbers, or dates that are not in them.
 - Cite inline at the sentence level as [cN](url), using the claim's id and source url. Every paragraph must carry its citations.
 - Structure: a "# <title>" heading answering the question, then 2-4 "## <section>" headings grouping related claims.
+- If skeptic objections are provided, add a "## Counter-considerations" section before "Excluded claims": address each objection honestly and concretely, stating whether it limits the finding and how.
 - Neutral, factual tone. No hedging beyond what the claims support.
 - After the report body, add a "## Excluded claims" section listing each unsupported or dropped claim as "- <text> — <verdict> (<feedback>)". Include it even if brief; write "(none)" if the list is empty.
 Output only the markdown.`;
@@ -37,6 +38,9 @@ async function synthesize({ state, llm, model = config.LLM_MODEL, temperature = 
 
 Supported claims (use only these in the report body):
 ${JSON.stringify(supported, null, 2)}
+
+Skeptic objections (address these honestly in "## Counter-considerations"):
+${JSON.stringify(state.objections ?? [], null, 2)}
 
 Claims to list in the "## Excluded claims" appendix (do NOT use them as facts):
 ${JSON.stringify(unsupported, null, 2)}`;
