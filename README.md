@@ -11,6 +11,8 @@ gaps and source-reliability issues — and a **Synthesizer** writes the final re
 verified claims only, addressing the skeptic's objections in a "Counter-considerations"
 section. An orchestrator routes the work and runs the verify-and-revise loop.
 
+> Last updated: 2026-10-11 · Phases 0–7 complete · Frontend v1 shipped
+
 The full roadmap and implementation plan lives in [PLAN.md](PLAN.md).
 
 ## How it works
