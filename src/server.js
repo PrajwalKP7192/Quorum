@@ -48,7 +48,24 @@ function createServer({ runsRootDir = runsRoot, runPipelineFn = runPipeline, llm
       }
       if (url.pathname.startsWith('/runs/')) {
         const id = path.basename(url.pathname);
-        const state = JSON.parse(await fs.readFile(path.join(runsRootDir, id, 'state.json'), 'utf8'));
+        const runDir = path.join(runsRootDir, id);
+        // Trace endpoint: raw event log as a JSON array.
+        if (url.pathname.endsWith('/trace')) {
+          try {
+            const raw = await fs.readFile(path.join(runDir, 'trace.jsonl'), 'utf8');
+            res.writeHead(200, { 'content-type': 'application/json' });
+            return res.end(JSON.stringify(raw.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l))));
+          } catch (err) {
+            res.writeHead(404, { 'content-type': 'application/json' });
+            return res.end(JSON.stringify({ error: `no trace for run ${id}` }));
+          }
+        }
+        const state = JSON.parse(await fs.readFile(path.join(runDir, 'state.json'), 'utf8'));
+        // Browser navigation (deep link) gets the page; fetch() gets JSON.
+        if ((req.headers.accept || '').includes('text/html')) {
+          res.writeHead(200, { 'content-type': 'text/html' });
+          return res.end(PAGE);
+        }
         res.writeHead(200, { 'content-type': 'application/json' });
         return res.end(JSON.stringify(state));
       }

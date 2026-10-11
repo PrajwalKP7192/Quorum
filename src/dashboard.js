@@ -73,14 +73,93 @@ async function loadRuns() {
 }
 
 async function showRun(id) {
-  const r = await (await fetch('/runs/' + id)).json();
+  const r = await (await fetch('/runs/' + id, { headers: { accept: 'application/json' } })).json();
   reset();
   $('q').value = r.question;
-  const byId = Object.fromEntries((r.claims || []).map((c) => [c.id, c.text]));
-  $('feed').innerHTML = (r.verdicts || []).map((v) => card(v, byId[v.claimId], true)).join('');
-  if (r.report) { $('report').innerHTML = mdToHtml(r.report); $('report').hidden = false; }
+  history.pushState(null, '', '/runs/' + id);
+  const byId = Object.fromEntries((r.claims || []).map((c) => [c.id, c]));
+  $('feed').innerHTML = (r.verdicts || []).map((v) => card(v, null, true) +
+    '<div class="quote">' + esc((byId[v.claimId] ? '' : '') ) +
+    '</div>').join('');
+  // evidence quotes: render under each card from the verdict's own quote
+  $('feed').innerHTML = (r.verdicts || []).map((v) =>
+    card(v, byId[v.claimId] ? byId[v.claimId].text : '', true).replace('</div></div>', '</div></div>')
+  ).join('');
+  renderQuotes(r.verdicts);
+  renderClaimsTable(r.claims || [], r.verdicts || []);
+  if (r.report) { $('report').innerHTML = mdToHtml(r.report); $('report').hidden = false; $('report').dataset.md = r.report; }
+  loadTrace(id);
   for (const el of Object.values(STAGES)) el.classList.add('done');
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderQuotes(verdicts) {
+  verdicts.forEach((v) => {
+    const el = $('feed').querySelector('[data-claim="' + v.claimId + '"] .claim-src');
+    if (el && v.evidenceQuote) {
+      el.insertAdjacentHTML('beforeend', '<div class="fb">“' + esc(v.evidenceQuote) + '”</div>');
+    }
+  });
+}
+
+function renderClaimsTable(claims, verdicts) {
+  const vBy = Object.fromEntries(verdicts.map((v) => [v.claimId, v]));
+  $('claims').innerHTML = claims.length
+    ? '<h2 class="sec">Claims & evidence</h2>' + claims.map((c) => {
+        const v = vBy[c.id];
+        const cls = v ? (v.verdict === 'supported' ? 'ok' : v.verdict === 'contradicted' ? 'bad' : 'warn') : 'warn';
+        return '<div class="claim ' + cls + '"><div class="claim-head">' +
+          '<span class="badge ' + cls + '">' + esc(v ? v.verdict : 'unverified') + '</span>' +
+          '<span class="claim-id">' + esc(c.id) + '</span></div>' +
+          '<div class="claim-text">' + esc(c.text) + '</div>' +
+          '<div class="claim-src">' + c.sources.map((s) =>
+            '<a href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' + esc(s.title) + '</a>').join(' · ') +
+          (v && v.evidenceQuote ? '<div class="fb">“' + esc(v.evidenceQuote) + '”</div>' : '') +
+          '</div></div>';
+      }).join('')
+    : '';
+}
+
+async function loadTrace(id) {
+  $('trace').hidden = true; $('trace').innerHTML = '';
+  let events;
+  try {
+    events = await (await fetch('/runs/' + id + '/trace')).json();
+  } catch { return; } // older runs have no trace
+  const t0 = events.length ? Date.parse(events[0].ts) : 0;
+  const ICON = { llm_call: '🧠', tool_call: '🔧', agent_event: '🔄', 'run:start': '▶️', 'run:done': '✅' };
+  const row = (e) => {
+    const dt = ((Date.parse(e.ts) - t0) / 1000).toFixed(1);
+    let detail = '';
+    if (e.type === 'llm_call') detail = e.model + ' · ' + e.latencyMs + 'ms · ' + (e.prompt_tokens ?? '?') + '+' + (e.completion_tokens ?? '?') + ' tok' + (e.retries ? ' · ' + e.retries + ' retries' : '');
+    else if (e.type === 'tool_call') detail = e.name + ' · ' + e.durationMs + 'ms' + (e.ok ? '' : ' · FAILED');
+    else if (e.type === 'agent_event') detail = 'round ' + e.round + ': ' + e.claims + ' claims, ' + e.supported + ' supported, ' + e.failed + ' failed';
+    else detail = esc(e.question || '');
+    return '<div class="trow ' + (e.ok === false ? 'bad' : '') + '"><span class="ttime">' + dt + 's</span><span>' + (ICON[e.type] || '·') + '</span><span class="ttype">' + e.type + '</span><span class="tdim">' + esc(detail) + '</span></div>';
+  };
+  const shown = events.length > 60 ? events.slice(0, 60) : events;
+  $('trace').innerHTML = '<h2 class="sec">Trace (' + events.length + ' events)</h2>' +
+    shown.map(row).join('') +
+    (events.length > shown.length ? '<button class="chip" id="moreTrace">show all ' + events.length + ' events</button>' : '');
+  $('trace').hidden = false;
+  const more = document.getElementById('moreTrace');
+  if (more) more.onclick = () => { $('trace').innerHTML = '<h2 class="sec">Trace (' + events.length + ' events)</h2>' + events.map(row).join(''); };
+}
+
+function copyReport() {
+  navigator.clipboard.writeText($('report').dataset.md || $('report').innerText).then(() => {
+    $('copyBtn').textContent = 'Copied ✓';
+    setTimeout(() => { $('copyBtn').textContent = 'Copy'; }, 1500);
+  });
+}
+
+function downloadReport() {
+  const blob = new Blob([$('report').dataset.md || $('report').innerText], { type: 'text/markdown' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'quorum-report.md';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function go(q) {
