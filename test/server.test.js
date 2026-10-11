@@ -27,6 +27,27 @@ async function withRunsDir() {
   return dir;
 }
 
+test('SSE stream sends heartbeats while the pipeline is silent', async () => {
+  const server = createServer({
+    runsRootDir: await withRunsDir(),
+    heartbeatMs: 10,
+    toolsFn: () => [],
+    runPipelineFn: async ({ onEvent }) => {
+      onEvent('round:start', { round: 1, total: 1 });
+      await new Promise((r) => setTimeout(r, 50)); // silence long enough for 2+ heartbeats
+      return { state: { question: 'Q?', round: 0, claims: [], verdicts: [], dropped: [], report: '# R' } };
+    },
+  });
+  try {
+    const base = await listen(server);
+    const res = await fetch(base + '/events?question=Q%3F');
+    const body = await res.text();
+    assert.ok(body.includes(':hb'), 'expected keep-alive heartbeat comments in the stream');
+  } finally {
+    server.close();
+  }
+});
+
 test('serves the dashboard page at /', async () => {
   const server = createServer({ runsRootDir: await withRunsDir(), toolsFn: () => [] });
   try {
