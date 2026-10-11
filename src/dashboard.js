@@ -59,6 +59,7 @@ function card(v, claimText, cite) {
     '<span class="claim-id">' + esc(v.claimId) + '</span></div>' +
     '<div class="claim-text">' + esc(claimText || '') + '</div>' +
     '<div class="claim-src">' + (cite ? '<a href="' + esc(v.url) + '" target="_blank" rel="noopener noreferrer">' + esc(v.url) + '</a>' : '') +
+    (v.evidenceQuote ? '<div class="fb">“' + esc(v.evidenceQuote) + '”</div>' : '') +
     (v.feedback ? '<div class="fb">' + esc(v.feedback) + '</div>' : '') + '</div></div>';
 }
 
@@ -80,7 +81,7 @@ async function showRun(id) {
   const byId = Object.fromEntries((r.claims || []).map((c) => [c.id, c.text]));
   $('feed').innerHTML = (r.verdicts || []).map((v) => card(v, byId[v.claimId] || '', true)).join('');
   renderClaimsTable(r.claims || [], r.verdicts || []);
-  if (r.report) { $('report').innerHTML = mdToHtml(r.report); $('report').hidden = false; $('report').dataset.md = r.report; }
+  if (r.report) { $('rpt-body').innerHTML = mdToHtml(r.report); $('report').hidden = false; $('report').dataset.md = r.report; }
   loadTrace(id);
   for (const el of Object.values(STAGES)) el.classList.add('done');
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -150,6 +151,8 @@ function go(q) {
   q = (q || $('q').value).trim(); if (!q) return;
   $('q').value = q;
   reset();
+  history.pushState(null, '', '/');
+  $('goBtn').disabled = true;
   const es = new EventSource('/events?question=' + encodeURIComponent(q));
   es.onmessage = (m) => {
     let e; try { e = JSON.parse(m.data); } catch { return; }
@@ -166,12 +169,13 @@ function go(q) {
     if (event === 'citation-check:fail') log('Citation failed [' + data.claimId + ']: ' + data.reason, 'bad');
     if (event === 'report') {
       for (const el of Object.values(STAGES)) { el.classList.remove('active'); el.classList.add('done'); }
-      $('report').innerHTML = mdToHtml(data.report || ''); $('report').hidden = false;
+      $('rpt-body').innerHTML = mdToHtml(data.report || ''); $('report').hidden = false; $('report').dataset.md = data.report || '';
+      $('goBtn').disabled = false;
       es.close(); loadRuns();
     }
-    if (event === 'error') { $('error').textContent = data.message; $('error').hidden = false; es.close(); }
+    if (event === 'error') { $('error').textContent = data.message; $('error').hidden = false; $('goBtn').disabled = false; es.close(); }
   };
-  es.onerror = () => { es.close(); log('Connection closed — no result. The server may be busy or restarting; try again.', 'bad'); };
+  es.onerror = () => { es.close(); $('goBtn').disabled = false; log('Connection closed — no result. The server may be busy or restarting; try again.', 'bad'); };
 }
 function log(t, cls) {
   const d = document.createElement('div');
@@ -181,6 +185,11 @@ function log(t, cls) {
 }
 $('q').addEventListener('keydown', (k) => { if (k.key === 'Enter') go(); });
 loadRuns();
+// Deep link: /runs/<id> opens that run's detail on page load (and after reload).
+(() => {
+  const m = location.pathname.match(/^\\/runs\\/([^/]+)$/);
+  if (m) showRun(decodeURIComponent(m[1]));
+})();
 `;
 
 const PAGE = `<!doctype html>
@@ -218,8 +227,12 @@ const PAGE = `<!doctype html>
   .claim-id{color:var(--dim);font-size:.78rem} .claim-src a{color:var(--accent);font-size:.82rem;word-break:break-all;text-decoration:none}
   .claim-src a:hover{text-decoration:underline} .fb{color:var(--dim);font-size:.8rem;margin-top:.3rem}
   #report{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:1.4rem 1.6rem;margin-top:1.4rem}
-  #report h1{font-size:1.35rem;border-bottom:1px solid var(--line);padding-bottom:.5rem} #report h2{font-size:1.1rem;margin-top:1.4rem}
-  #report a{color:var(--accent)} #report[hidden]{display:none}
+  .rpt-actions{display:flex;gap:.5rem;justify-content:flex-end;margin-bottom:.6rem}
+  #rpt-body h1{font-size:1.35rem;border-bottom:1px solid var(--line);padding-bottom:.5rem} #rpt-body h2{font-size:1.1rem;margin-top:1.4rem}
+  #rpt-body a{color:var(--accent)} #report[hidden]{display:none}
+  .trow{display:flex;gap:.6rem;align-items:baseline;font-size:.82rem;padding:.2rem 0;border-bottom:1px solid var(--line);font-family:ui-monospace,Menlo,monospace}
+  .ttime{color:var(--dim);min-width:52px;text-align:right} .ttype{color:var(--accent);min-width:90px} .tdim{color:var(--dim);word-break:break-word}
+  .trow.bad .ttype{color:var(--bad)}
   h2.sec{font-size:1.05rem;margin:2.4rem 0 1rem;color:var(--fg)} 
   #runs{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.7rem}
   .run{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.8rem 1rem;cursor:pointer}
@@ -233,7 +246,7 @@ const PAGE = `<!doctype html>
 <section class="hero">
   <h2>Ask. Get answers with receipts.</h2>
   <div class="search"><input id="q" placeholder="Ask a research question…" autofocus>
-  <button id="go" onclick="go()">Research</button></div>
+  <button id="goBtn" onclick="go()">Research</button></div>
   <div class="chips">
     <span class="chip" onclick="go(this.textContent)">What is the current population of Tokyo?</span>
     <span class="chip" onclick="go(this.textContent)">What is the speed of light?</span>
@@ -249,7 +262,9 @@ const PAGE = `<!doctype html>
 
 <div id="error" class="error" hidden></div>
 <div id="feed"></div>
-<div id="report" hidden></div>
+<div id="claims"></div>
+<div id="report" hidden><div class="rpt-actions"><button class="chip" id="copyBtn" onclick="copyReport()">Copy</button><button class="chip" onclick="downloadReport()">Download .md</button></div><div id="rpt-body"></div></div>
+<div id="trace" hidden></div>
 
 <h2 class="sec">Past runs</h2>
 <div id="runs"></div>

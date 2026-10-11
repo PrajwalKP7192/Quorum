@@ -23,9 +23,45 @@ async function withRunsDir() {
   };
   await fs.mkdir(path.join(dir, 'run-a'), { recursive: true });
   await fs.writeFile(path.join(dir, 'run-a', 'state.json'), JSON.stringify(state));
+  await fs.writeFile(path.join(dir, 'run-a', 'trace.jsonl'), [
+    JSON.stringify({ ts: '2026-10-11T00:00:00.000Z', type: 'run:start', question: 'What?' }),
+    JSON.stringify({ ts: '2026-10-11T00:00:01.000Z', type: 'llm_call', model: 'm1', latencyMs: 500, prompt_tokens: 10, completion_tokens: 5, retries: 1 }),
+    JSON.stringify({ ts: '2026-10-11T00:00:02.000Z', type: 'tool_call', name: 'web_search', durationMs: 120, ok: false }),
+  ].join('\n'));
   await fs.writeFile(path.join(dir, 'not-a-run.txt'), 'nope');
   return dir;
 }
+
+test('GET /runs/:id/trace returns parsed JSONL events; 404 JSON when absent', async () => {
+  const server = createServer({ runsRootDir: await withRunsDir(), toolsFn: () => [] });
+  try {
+    const base = await listen(server);
+    const events = await (await fetch(base + '/runs/run-a/trace')).json();
+    assert.equal(events.length, 3);
+    assert.equal(events[1].type, 'llm_call');
+    assert.equal(events[1].retries, 1);
+    const missing = await fetch(base + '/runs/run-b/trace');
+    assert.equal(missing.status, 404);
+    assert.ok((await missing.json()).error.includes('no trace'));
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /runs/:id serves the dashboard page for browsers and JSON for fetch', async () => {
+  const server = createServer({ runsRootDir: await withRunsDir(), toolsFn: () => [] });
+  try {
+    const base = await listen(server);
+    const browser = await fetch(base + '/runs/run-a', { headers: { accept: 'text/html,application/xhtml+xml' } });
+    assert.match(await browser.text(), /<title>Quorum[^<]*<\/title>/);
+    const api = await fetch(base + '/runs/run-a', { headers: { accept: 'application/json' } });
+    assert.equal((await api.json()).report, '# Report\n\nBody.');
+    const lazy = await fetch(base + '/runs/run-a'); // fetch default Accept: */*
+    assert.equal((await lazy.json()).question, 'What?');
+  } finally {
+    server.close();
+  }
+});
 
 test('SSE stream sends heartbeats while the pipeline is silent', async () => {
   const server = createServer({

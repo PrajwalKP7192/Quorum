@@ -47,10 +47,10 @@ function createServer({ runsRootDir = runsRoot, runPipelineFn = runPipeline, llm
         return res.end(JSON.stringify(await listRuns(runsRootDir)));
       }
       if (url.pathname.startsWith('/runs/')) {
-        const id = path.basename(url.pathname);
+        const [id, sub] = url.pathname.slice('/runs/'.length).split('/');
         const runDir = path.join(runsRootDir, id);
         // Trace endpoint: raw event log as a JSON array.
-        if (url.pathname.endsWith('/trace')) {
+        if (sub === 'trace') {
           try {
             const raw = await fs.readFile(path.join(runDir, 'trace.jsonl'), 'utf8');
             res.writeHead(200, { 'content-type': 'application/json' });
