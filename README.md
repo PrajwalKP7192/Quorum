@@ -5,9 +5,11 @@
 ![deps](https://img.shields.io/badge/runtime%20deps-1%20%28zod%29-blue)
 
 A multi-agent research team. A **Researcher** decomposes a question and gathers cited
-claims, a **Fact-checker** independently verifies every claim against live sources, and
-a **Synthesizer** writes the final report from verified claims only. An orchestrator
-routes the work and runs the verify-and-revise loop.
+claims, a **Fact-checker** independently verifies every claim against live sources, a
+**Skeptic** then argues against every supported claim — hunting counter-evidence, scope
+gaps and source-reliability issues — and a **Synthesizer** writes the final report from
+verified claims only, addressing the skeptic's objections in a "Counter-considerations"
+section. An orchestrator routes the work and runs the verify-and-revise loop.
 
 The full roadmap and implementation plan lives in [PLAN.md](PLAN.md).
 
@@ -28,9 +30,13 @@ question ──▶ Orchestrator
       any failed? ──yes──▶ back to Researcher (max MAX_ROUNDS)
                  │ no
                  ▼
+          ┌──────────────┐  argues AGAINST every supported claim
+          │   Skeptic    │──────────────▶ Tavily
+          └──────┬───────┘
+                 ▼  objections[] (max one honest objection per claim)
           ┌──────────────┐
-          │ Synthesizer  │──▶ report from supported claims only
-          └──────────────┘     + "Excluded claims" appendix
+          │ Synthesizer  │──▶ report + "Counter-considerations",
+          └──────────────┘     from supported claims only
 ```
 
 Design principles:
@@ -42,6 +48,10 @@ Design principles:
   must quote evidence verbatim with a URL, structured outputs get schema-repair
   round-trips, and a mechanical (no-LLM) citation check confirms quotes really appear
   on the cited pages.
+- **The system argues with itself before you read it:** a skeptic agent challenges
+  every supported claim (counter-evidence, scope gaps, source reliability) and its
+  objections must be addressed in the final report — manufactured doubt is forbidden
+  in its prompt; honest objections are mandatory in the output.
 - **Plain `fetch` everywhere;** the only runtime dependency is `zod`. Works with any
   OpenAI-compatible endpoint.
 - **Failures are contained:** per-claim verification is failure-isolated, rate limits
