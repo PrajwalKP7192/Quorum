@@ -72,6 +72,27 @@ test('verifyAll isolates per-claim crashes as unverifiable verdicts', async () =
   assert.equal(verdicts[2].verdict, 'supported');
 });
 
+test('verifyAll emits a verify:claim event per verdict as it lands', async () => {
+  const events = [];
+  const claims = [claim('c1'), claim('c2'), claim('c3')];
+  const verdicts = await verifyAll(claims, {
+    llm: {},
+    tools: [],
+    verifyOne: async ({ claim }) => {
+      await sleep(claim.id === 'c2' ? 20 : 5); // land out of order
+      return supported(claim.id);
+    },
+    onEvent: (event, data) => events.push([event, data]),
+  });
+  const claimEvents = events.filter(([e]) => e === 'verify:claim');
+  assert.equal(claimEvents.length, 3);
+  assert.deepEqual(claimEvents.map(([, d]) => d.claimId).sort(), ['c1', 'c2', 'c3']);
+  assert.equal(claimEvents[0][1].verdict.verdict, 'supported');
+  assert.ok(claimEvents.every(([, d]) => typeof d.claimText === 'string'));
+  // final verdicts array still matches claim order despite out-of-order completion
+  assert.deepEqual(verdicts.map((v) => v.claimId), ['c1', 'c2', 'c3']);
+});
+
 test('verifyAll handles an empty claim list', async () => {
   const verdicts = await verifyAll([], { llm: {}, tools: [], verifyOne: async () => { throw new Error('never'); } });
   assert.deepEqual(verdicts, []);

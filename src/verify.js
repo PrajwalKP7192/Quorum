@@ -8,7 +8,7 @@ const { verifyClaim, fallbackVerdict } = require('./agents/fact-checker');
 
 async function verifyAll(
   claims,
-  { llm, tools, concurrency = config.VERIFY_CONCURRENCY, checkerModel, trace, verifyOne = verifyClaim } = {}
+  { llm, tools, concurrency = config.VERIFY_CONCURRENCY, checkerModel, trace, onEvent = () => {}, verifyOne = verifyClaim } = {}
 ) {
   if (!Array.isArray(claims)) throw new Error('verifyAll: claims must be an array');
   const verdicts = new Array(claims.length);
@@ -24,6 +24,9 @@ async function verifyAll(
       } catch (err) {
         verdicts[i] = fallbackVerdict(claim, `verification crashed: ${err.message}`);
       }
+      // Stream each verdict as it lands — the dashboard renders cards live
+      // instead of waiting for the whole round.
+      onEvent('verify:claim', { claimId: claim.id, claimText: claim.text, verdict: verdicts[i] });
     }
   };
 

@@ -32,6 +32,12 @@ function mdToHtml(md) {
 }
 
 const STAGES = { researcher: $('stage-researcher'), checker: $('stage-checker'), synth: $('stage-synth') };
+const rendered = new Set(); // claim ids already shown — verify:claim streams + verify:done batch must not duplicate
+function showVerdict(v, claimText) {
+  if (rendered.has(v.claimId)) return;
+  rendered.add(v.claimId);
+  $('feed').insertAdjacentHTML('afterbegin', card(v, claimText, true));
+}
 function stage(name, state) {
   for (const [k, el] of Object.entries(STAGES)) {
     el.classList.toggle('active', k === name && state === 'active');
@@ -41,6 +47,7 @@ function stage(name, state) {
   if (state === 'active' && name) STAGES[name].classList.add('active');
 }
 function reset() {
+  rendered.clear();
   $('feed').innerHTML = ''; $('report').hidden = true; $('error').hidden = true;
   for (const el of Object.values(STAGES)) el.classList.remove('active', 'done');
   stage('researcher', 'active');
@@ -86,10 +93,11 @@ function go(q) {
     const { event, data } = e;
     if (event === 'round:start') { stage('researcher', 'active'); log('Round ' + data.round + ' of ' + data.total, 'dim'); }
     if (event === 'verify:start') { stage('checker', 'active'); log('Verifying ' + data.claims + ' claim' + (data.claims === 1 ? '' : 's') + '…', 'dim'); }
+    if (event === 'verify:claim') showVerdict(data.verdict, data.claimText);
     if (event === 'verify:done') {
       stage('synth', 'active');
       log(data.supported + ' supported · ' + data.failed + ' failed', data.failed ? 'bad' : 'ok');
-      $('feed').innerHTML = data.verdicts.map((v) => card(v, null, true)).join('') + $('feed').innerHTML;
+      data.verdicts.forEach((v) => showVerdict(v, null)); // fill any the stream missed
     }
     if (event === 'citation-check:start') log('Mechanical citation check (' + data.mode + ')…', 'dim');
     if (event === 'citation-check:fail') log('Citation failed [' + data.claimId + ']: ' + data.reason, 'bad');

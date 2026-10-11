@@ -85,6 +85,11 @@ test('streams pipeline events over SSE and ends with the report', async () => {
     toolsFn: () => [],
     runPipelineFn: async ({ question, onEvent }) => {
       onEvent('round:start', { round: 1, total: 1 });
+      onEvent('verify:claim', {
+        claimId: 'c1',
+        claimText: 'Claim one.',
+        verdict: { claimId: 'c1', verdict: 'supported', evidenceQuote: 'q', url: 'https://a.example' },
+      });
       onEvent('verify:done', { round: 1, supported: 1, failed: 0 });
       return { state: { question, round: 0, claims: [], verdicts: [], dropped: [], report: '# Live report' } };
     },
@@ -94,9 +99,10 @@ test('streams pipeline events over SSE and ends with the report', async () => {
     const res = await fetch(base + '/events?question=Q%3F');
     assert.equal(res.headers.get('content-type'), 'text/event-stream');
     const body = await res.text();
-    const events = body.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l.replace(/^data: /, '')));
-    assert.deepEqual(events.map((e) => e.event), ['round:start', 'verify:done', 'report']);
-    assert.equal(events[2].data.report, '# Live report');
+    const events = body.trim().split('\n').filter((l) => l.startsWith('data: ')).map((l) => JSON.parse(l.slice(6)));
+    assert.deepEqual(events.map((e) => e.event), ['round:start', 'verify:claim', 'verify:done', 'report']);
+    assert.equal(events[1].data.claimId, 'c1');
+    assert.equal(events[3].data.report, '# Live report');
     // a second concurrent run is rejected while one is in flight — verified by flag reset here
   } finally {
     server.close();

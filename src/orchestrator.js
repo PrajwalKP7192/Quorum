@@ -85,7 +85,7 @@ async function runPipeline({
     }
 
     onEvent('verify:start', { round: round + 1, claims: state.claims.length });
-    state.verdicts = await verifyAllFn(state.claims, { llm, tools, concurrency, checkerModel, trace });
+    state.verdicts = await verifyAllFn(state.claims, { llm, tools, concurrency, checkerModel, trace, onEvent });
 
     // Mechanical citation check (no LLM): do the quoted evidence quotes really
     // appear on the cited pages? strict demotes failed supports to

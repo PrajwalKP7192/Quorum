@@ -74,6 +74,10 @@ async function main() {
     onEvent: (event, data) => {
       if (event === 'round:start') console.error(`\n── round ${data.round}/${data.total} ──`);
       if (event === 'verify:start') console.error(`verifying ${data.claims} claim(s) ...`);
+      if (event === 'verify:claim') {
+        const mark = SYMBOL[data.verdict.verdict] ?? ' ';
+        console.error(`  ${mark} [${data.claimId}] ${data.verdict.verdict} — ${(data.claimText || '').slice(0, 70)}`);
+      }
       if (event === 'verify:done') console.error(`${data.supported} supported, ${data.failed} failed`);
       if (event === 'rounds:exhausted') console.error(`max rounds reached; ${data.failed} claim(s) remain unverified`);
       if (event === 'report:start') console.error('synthesizing report ...');
