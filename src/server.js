@@ -47,8 +47,19 @@ function createServer({ runsRootDir = runsRoot, runPipelineFn = runPipeline, llm
         return res.end(JSON.stringify(await listRuns(runsRootDir)));
       }
       if (url.pathname.startsWith('/runs/')) {
-        const [id, sub] = url.pathname.slice('/runs/'.length).split('/');
+        const [rawId, sub] = url.pathname.slice('/runs/'.length).split('/');
+        // Run ids are generated timestamps — anything else (../, etc.) is rejected.
+        if (!/^[a-zA-Z0-9-]+$/.test(rawId)) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'invalid run id' }));
+        }
+        const id = rawId;
         const runDir = path.join(runsRootDir, id);
+        if (req.method === 'DELETE' && !sub) {
+          await fs.rm(runDir, { recursive: true, force: true });
+          res.writeHead(200, { 'content-type': 'application/json' });
+          return res.end(JSON.stringify({ deleted: id }));
+        }
         // Trace endpoint: raw event log as a JSON array.
         if (sub === 'trace') {
           try {

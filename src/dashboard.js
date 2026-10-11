@@ -64,14 +64,49 @@ function card(v, claimText, cite) {
 }
 
 async function loadRuns() {
-  const rs = await (await fetch('/runs')).json();
+  allRuns = await (await fetch('/runs')).json();
+  renderRuns();
+}
+
+let allRuns = [];
+function renderRuns() {
+  const q = ($('runSearch')?.value || '').toLowerCase();
+  const sort = $('runSort')?.value || 'new';
+  let rs = allRuns.filter((r) => !q || r.question.toLowerCase().includes(q));
+  if (sort === 'best') rs = [...rs].sort((a, b) => (b.claims ? b.supported / b.claims : -1) - (a.claims ? a.supported / a.claims : -1));
+  else rs = [...rs].sort((a, b) => b.id.localeCompare(a.id));
   $('runs').innerHTML = rs.length ? rs.map((r) =>
-    '<div class="run" onclick="showRun(\\'' + esc(r.id) + '\\')">' +
+    '<div class="run" tabindex="0" role="button" onclick="showRun(\\'' + esc(r.id) + '\\')" onkeydown="if(event.key===\\'Enter\\')showRun(\\'' + esc(r.id) + '\\')">' +
+    '<button class="del" title="Delete run" onclick="event.stopPropagation();deleteRun(\\'' + esc(r.id) + '\\')">✕</button>' +
     '<div class="run-q">' + esc(r.question) + '</div>' +
     '<div class="run-meta"><span class="badge ' + (r.supported === r.claims && r.claims > 0 ? 'ok' : r.supported ? 'warn' : 'bad') + '">' +
     r.supported + '/' + r.claims + ' supported</span><span class="dim">' + esc(r.id.slice(0, 16)) + '</span></div></div>'
-  ).join('') : '<p class="dim">No runs yet — ask your first question above.</p>';
+  ).join('') : '<p class="dim">' + (q ? 'No runs match “' + esc(q) + '”.' : 'No runs yet — ask your first question above.') + '</p>';
 }
+
+async function deleteRun(id) {
+  if (!confirm('Delete this run?')) return;
+  await fetch('/runs/' + id, { method: 'DELETE' });
+  allRuns = allRuns.filter((r) => r.id !== id);
+  renderRuns();
+}
+
+// Theme: dark default, persisted choice.
+(() => {
+  const saved = localStorage.getItem('quorum-theme');
+  if (saved) document.documentElement.dataset.theme = saved;
+  const btn = $('themeBtn');
+  const sync = () => { btn.textContent = document.documentElement.dataset.theme === 'light' ? '☀' : '☾'; };
+  sync();
+  btn.onclick = () => {
+    const next = document.documentElement.dataset.theme === 'light' ? '' : 'light';
+    if (next) document.documentElement.dataset.theme = next; else delete document.documentElement.dataset.theme;
+    localStorage.setItem('quorum-theme', next);
+    sync();
+  };
+})();
+$('runSearch')?.addEventListener('input', renderRuns);
+$('runSort')?.addEventListener('change', renderRuns);
 
 async function showRun(id) {
   const r = await (await fetch('/runs/' + id, { headers: { accept: 'application/json' } })).json();
@@ -198,7 +233,10 @@ const PAGE = `<!doctype html>
 <title>Quorum — verified research</title>
 <style>
   :root{--bg:#0d1117;--card:#161b22;--line:#21262d;--fg:#c9d1d9;--dim:#8b949e;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--accent:#58a6ff}
+  html[data-theme="light"]{--bg:#f6f8fa;--card:#ffffff;--line:#d0d7de;--fg:#1f2328;--dim:#59636e;--ok:#1a7f37;--bad:#cf222e;--warn:#9a6700;--accent:#0969da}
   *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font-size:15px;line-height:1.55;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion: reduce){ *{animation:none !important;transition:none !important} }
   main{max-width:920px;margin:0 auto;padding:0 1.25rem 4rem}
   header{display:flex;align-items:center;gap:.7rem;padding:1.4rem 0 1rem;border-bottom:1px solid var(--line)}
   .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#238636,#58a6ff);display:grid;place-items:center;font-weight:800;color:#fff}
@@ -210,6 +248,12 @@ const PAGE = `<!doctype html>
   .search button:hover{background:#2ea043} .search button:disabled{opacity:.5;cursor:default}
   .chips{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.8rem} .chip{background:var(--card);border:1px solid var(--line);
     color:var(--dim);border-radius:99px;padding:.3rem .8rem;font-size:.8rem;cursor:pointer} .chip:hover{color:var(--fg);border-color:var(--accent)}
+  .hist-controls{display:flex;gap:.6rem;margin-bottom:.9rem}
+  .hist-controls input{flex:1;background:var(--card);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:.5rem .8rem}
+  .hist-controls select{background:var(--card);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:.5rem}
+  .run{position:relative}
+  .run .del{position:absolute;top:.5rem;right:.5rem;border:0;background:transparent;color:var(--dim);cursor:pointer;font-size:1rem;padding:.1rem .35rem;border-radius:6px;opacity:0;transition:.15s}
+  .run:hover .del,.run:focus-within .del{opacity:1} .run .del:hover{color:var(--bad);background:rgba(248,81,73,.12)}
   .stages{display:flex;gap:.7rem;margin:1.6rem 0} .stage{flex:1;background:var(--card);border:1px solid var(--line);
     border-radius:12px;padding:.8rem 1rem;position:relative;transition:.3s}
   .stage .n{font-size:1.2rem} .stage .t{font-weight:600;font-size:.92rem} .stage .d{color:var(--dim);font-size:.75rem}
@@ -241,7 +285,7 @@ const PAGE = `<!doctype html>
   @media(max-width:640px){.stages{flex-direction:column}}
 </style></head><body>
 <main>
-<header><div class="logo">Q</div><div><h1>Quorum</h1><div class="sub">multi-agent research · every claim independently verified</div></div></header>
+<header><div class="logo">Q</div><div><h1>Quorum</h1><div class="sub">multi-agent research · every claim independently verified</div></div><button class="chip" id="themeBtn" title="Toggle theme" style="margin-left:auto">☾</button></header>
 
 <section class="hero">
   <h2>Ask. Get answers with receipts.</h2>
@@ -261,12 +305,13 @@ const PAGE = `<!doctype html>
 </div>
 
 <div id="error" class="error" hidden></div>
-<div id="feed"></div>
+<div id="feed" aria-live="polite"></div>
 <div id="claims"></div>
 <div id="report" hidden><div class="rpt-actions"><button class="chip" id="copyBtn" onclick="copyReport()">Copy</button><button class="chip" onclick="downloadReport()">Download .md</button></div><div id="rpt-body"></div></div>
 <div id="trace" hidden></div>
 
 <h2 class="sec">Past runs</h2>
+<div class="hist-controls"><input id="runSearch" placeholder="Filter runs…" aria-label="Filter runs"><select id="runSort" aria-label="Sort runs"><option value="new">Newest</option><option value="best">Best support rate</option></select></div>
 <div id="runs"></div>
 </main>
 <script>${CLIENT_JS}</script></body></html>`;

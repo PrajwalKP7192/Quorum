@@ -84,6 +84,23 @@ test('SSE stream sends heartbeats while the pipeline is silent', async () => {
   }
 });
 
+test('DELETE /runs/:id removes the run; invalid ids are rejected', async () => {
+  const runsDir = await withRunsDir();
+  const server = createServer({ runsRootDir: runsDir, toolsFn: () => [] });
+  try {
+    const base = await listen(server);
+    const del = await fetch(base + '/runs/run-a', { method: 'DELETE' });
+    assert.equal(del.status, 200);
+    assert.equal((await del.json()).deleted, 'run-a');
+    const gone = await fetch(base + '/runs/run-a');
+    assert.equal(gone.status, 500); // state.json no longer exists
+    const traversal = await fetch(base + '/runs/..%2F..%2Fetc', { method: 'DELETE' });
+    assert.equal(traversal.status, 400);
+  } finally {
+    server.close();
+  }
+});
+
 test('serves the dashboard page at /', async () => {
   const server = createServer({ runsRootDir: await withRunsDir(), toolsFn: () => [] });
   try {
