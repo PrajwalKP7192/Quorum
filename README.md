@@ -1,7 +1,7 @@
 # Quorum
 
 [![CI](https://github.com/PrajwalKP7192/Quorum/actions/workflows/ci.yml/badge.svg)](https://github.com/PrajwalKP7192/Quorum/actions/workflows/ci.yml)
-![tests](https://img.shields.io/badge/tests-68%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-79%20passing-brightgreen)
 ![deps](https://img.shields.io/badge/runtime%20deps-1%20%28zod%29-blue)
 
 A multi-agent research team. A **Researcher** decomposes a question and gathers cited
@@ -58,6 +58,7 @@ Design principles:
 - [x] Phase 4 — quality hardening (mechanical citation checks, claim dedupe, source ranking)
 - [x] Phase 5 — tracing (JSONL per run) + eval scorecard (`npm run eval`)
 - [x] Phase 6 — live web dashboard (`npm start`, zero added dependencies)
+- [ ] Frontend v1 — scoped in [docs/FRONTEND_REQUIREMENTS.md](docs/FRONTEND_REQUIREMENTS.md)
 
 ## Setup
 
@@ -94,6 +95,33 @@ in `.env` if you are not using OpenAI directly. Validated on Groq's free tier
 
 Every run persists `runs/<id>/state.json` (claims, verdicts, report) and
 `runs/<id>/trace.jsonl` — one JSON line per LLM call, tool call and round result.
+
+## Project structure
+
+```
+src/
+  contracts.js        Zod schemas — the only coupling between agents
+  llm.js              OpenAI-compatible chat + structured output with repair round-trips,
+                      rate-limit/network retries, transcript-friendly error handling
+  config.js           env-driven configuration (.env, no dotenv dep)
+  agents/
+    base.js           generic tool-calling loop (injectable LLM → tests use fakes)
+    researcher.js     decompose → search → extract claims; revise round with stable ids
+    fact-checker.js   adversarial per-claim verification at temperature 0
+    synthesizer.js    report from supported claims only
+  verify.js           parallel verification, concurrency-capped, failure-isolated
+  orchestrator.js     the verify-and-revise loop; persists runs/<id>/state.json
+  tools/              Tavily search (ranked + deduped), HTML→text fetch, citation check
+  trace.js            JSONL event log per run
+  server.js           node:http dashboard + SSE API (zero deps)
+  dashboard.js        the inlined frontend page
+evals/                20-question eval set + `npm run eval` scorecard
+test/                 79 network-free tests — CI runs with zero API keys
+```
+
+Tests are hermetic: agents take their LLM and tools as injectable parameters, so the
+suite runs with no `.env` and no network — which is why CI on a clean Ubuntu runner
+passes with zero API access.
 
 ## Known limitations
 
